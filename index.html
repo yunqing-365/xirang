@@ -20,7 +20,7 @@
             font-family: 'Noto Serif SC', serif;
             margin: 0;
             padding: 0;
-            background-image: url('data:image/svg+xml;utf8,<svg width="100" height="100" xmlns="http://www.w3.org/2000/svg"><filter id="noise"><feTurbulence type="fractalNoise" baseFrequency="0.8" numOctaves="4" stitchTiles="stitch"/></filter><rect width="100" height="100" filter="url(%23noise)" opacity="0.05"/></svg>'); /* 纸张纹理质感 */
+            background-image: url('data:image/svg+xml;utf8,<svg width="100" height="100" xmlns="http://www.w3.org/2000/svg"><filter id="noise"><feTurbulence type="fractalNoise" baseFrequency="0.8" numOctaves="4" stitchTiles="stitch"/></filter><rect width="100" height="100" filter="url(%23noise)" opacity="0.05"/></svg>');
         }
 
         .header {
@@ -59,10 +59,10 @@
             display: flex;
             flex-direction: column;
             gap: 20px;
-            padding-bottom: 100px;
+            padding-bottom: 150px; /* 给底部控制台留足空间 */
         }
 
-        /* 古籍册页风格的卡片 */
+        /* 智能体卡片 */
         .chat-card {
             background: #FFFFFF;
             border: 1px solid var(--border-gold);
@@ -71,7 +71,7 @@
             box-shadow: 2px 4px 15px rgba(0,0,0,0.02);
             opacity: 0;
             transform: translateY(20px);
-            animation: fadeIn 0.8s forwards;
+            animation: fadeIn 0.6s forwards;
         }
 
         .chat-card::before {
@@ -81,6 +81,29 @@
             width: 2px;
             background-color: var(--accent-red);
             opacity: 0.6;
+        }
+
+        /* 旁白卡片专属样式 */
+        .narrator-card {
+            background: transparent;
+            border: none;
+            box-shadow: none;
+            text-align: center;
+            padding: 15px;
+            color: #555;
+            font-style: italic;
+        }
+        
+        .narrator-card::before {
+            display: none;
+        }
+        
+        .narrator-card span {
+            background: rgba(212, 196, 168, 0.3);
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-size: 0.95em;
+            border: 1px dashed var(--border-gold);
         }
 
         .agent-name {
@@ -115,6 +138,14 @@
             font-size: 0.9em;
         }
 
+        /* 正在思考提示 */
+        .thinking-indicator {
+            margin-left: 10px;
+            color: #7F8C8D;
+            font-style: italic;
+            animation: pulse 1.5s infinite;
+        }
+
         /* 右侧：协同产出物 */
         .artifacts-panel {
             flex: 1;
@@ -142,7 +173,7 @@
             font-size: 1.1em;
         }
 
-        /* 底部控制台 */
+        /* 底部控制台与干预面板 */
         .controls {
             position: fixed;
             bottom: 0;
@@ -150,9 +181,47 @@
             width: 100%;
             background: rgba(253, 246, 227, 0.95);
             border-top: 1px solid var(--border-gold);
-            padding: 20px 0;
-            text-align: center;
+            padding: 15px 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 10px;
             backdrop-filter: blur(5px);
+            z-index: 100;
+        }
+
+        .intervention-box {
+            display: flex;
+            gap: 10px;
+            width: 50%;
+            max-width: 600px;
+        }
+
+        .intervention-box input {
+            flex: 1;
+            padding: 8px 15px;
+            border: 1px solid var(--border-gold);
+            border-radius: 4px;
+            background: rgba(255, 255, 255, 0.7);
+            font-family: 'Noto Serif SC', serif;
+            color: var(--accent-red);
+            outline: none;
+        }
+
+        .intervention-box input::placeholder {
+            color: #aaa;
+        }
+
+        .intervention-box button {
+            background-color: transparent;
+            border: 1px solid var(--accent-red);
+            color: var(--accent-red);
+            padding: 8px 15px;
+        }
+        
+        .intervention-box button:hover {
+            background-color: rgba(139, 29, 29, 0.1);
+            box-shadow: none;
         }
 
         button {
@@ -165,6 +234,7 @@
             cursor: pointer;
             transition: all 0.3s;
             letter-spacing: 2px;
+            border-radius: 4px;
         }
 
         button:hover {
@@ -180,6 +250,12 @@
 
         @keyframes fadeIn {
             to { opacity: 1; transform: translateY(0); }
+        }
+
+        @keyframes pulse {
+            0% { opacity: 0.5; }
+            50% { opacity: 1; }
+            100% { opacity: 0.5; }
         }
     </style>
 </head>
@@ -204,72 +280,151 @@
         </div>
     </div>
 
+    <!-- 升级的底部控制台 -->
     <div class="controls">
+        <div class="intervention-box">
+            <input type="text" id="interventionInput" placeholder="在此输入高维指令（如：忽然一阵冷风吹开了窗户）...">
+            <button onclick="sendIntervention()">注入干预</button>
+        </div>
         <button id="nextBtn" onclick="nextRound()">推进时空演化 (Advance)</button>
     </div>
 
     <script>
-        async function nextRound() {
-            const btn = document.getElementById('nextBtn');
-            btn.disabled = true;
-            btn.innerText = "智能体博弈与演算中...";
+        // 【新增】下达高维干预指令
+        async function sendIntervention() {
+            const input = document.getElementById('interventionInput');
+            const msg = input.value.trim();
+            if(!msg) return;
 
             try {
-                // 向我们的 Python 后端发送请求
-                const response = await fetch('/api/next', { method: 'POST' });
-                const data = await response.json();
-
-                if(data.status === "success") {
-                    data.results.forEach((res, index) => {
-                        setTimeout(() => {
-                            appendChatCard(res.name, res.action, res.dialogue, res.contribution, res.show_image);
-                            updateWorkspace(res.workspace);
-                        }, index * 1000); // 错开显示时间，增加呼吸感
-                    });
-                }
+                await fetch('/api/intervene', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ message: msg })
+                });
+                
+                // 给出视觉反馈
+                input.value = '';
+                input.placeholder = "⚡ 神谕已下达，将在下一幕触发...";
+                setTimeout(() => input.placeholder = "在此输入高维指令...", 3000);
             } catch (error) {
-                alert("后端连接失败，请确保 Python 服务已启动！");
-            } finally {
-                setTimeout(() => {
-                    btn.disabled = false;
-                    btn.innerText = "推进时空演化 (Advance)";
-                    window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
-                }, data.results ? data.results.length * 1000 : 0);
+                alert("干预失败，后端服务未响应！");
             }
         }
 
+        // 【重构】使用 SSE 接收流式数据
+        function nextRound() {
+            const btn = document.getElementById('nextBtn');
+            btn.disabled = true;
+            btn.innerText = "时空正在流转...";
+            
+            removeThinking(); // 清理残留
+
+            // 建立与后端的流式连接
+            const eventSource = new EventSource('/api/stream_next');
+            
+            eventSource.onmessage = function(event) {
+                const data = JSON.parse(event.data);
+                
+                if (data.type === 'narrator') {
+                    // 1. 导演抛出了旁白
+                    appendNarrator(data.content);
+                } 
+                else if (data.type === 'thinking') {
+                    // 2. 某个智能体正在进行大模型推理
+                    appendThinking(data.name);
+                } 
+                else if (data.type === 'agent_action') {
+                    // 3. 智能体行动完毕
+                    removeThinking();
+                    appendChatCard(data.name, data.action, data.dialogue, data.contribution, data.show_image);
+                    updateWorkspace(data.workspace);
+                    
+                    // 这一幕结束，主动关闭连接
+                    eventSource.close();
+                    resetButton();
+                }
+            };
+
+            eventSource.onerror = function(err) {
+                console.error("流式连接错误:", err);
+                eventSource.close();
+                removeThinking();
+                resetButton();
+                appendNarrator("【系统】时空波动异常，连接中断。");
+            };
+            
+            function resetButton() {
+                btn.disabled = false;
+                btn.innerText = "推进时空演化 (Advance)";
+                scrollToBottom();
+            }
+        }
+
+        // 渲染普通的智能体卡片
         function appendChatCard(name, action, dialogue, contribution, showImage) {
-    const stream = document.getElementById('chat-stream');
-    
-    // 处理文本贡献
-    let contributionHtml = contribution && contribution !== "无" 
-        ? `<div class="agent-contribution">[任务补充]：${contribution}</div>` : '';
+            const stream = document.getElementById('chat-stream');
+            
+            let contributionHtml = contribution && contribution !== "无" 
+                ? `<div class="agent-contribution">[任务补充]：${contribution}</div>` : '';
 
-    // 【新增】处理图片展示。假设它属于 song 时代
-    let imageHtml = '';
-    if (showImage && showImage !== "无") {
-        imageHtml = `
-            <div style="margin-top: 15px; margin-left: 10px;">
-                <p style="font-size: 0.8em; color: #8B1D1D; margin-bottom: 5px;">📜 呈上时空文献：</p>
-                <img src="/images/song/${showImage}" alt="文献" style="max-width: 80%; border: 2px solid var(--border-gold); border-radius: 4px; box-shadow: 2px 2px 10px rgba(0,0,0,0.1);">
-            </div>
-        `;
-    }
+            let imageHtml = '';
+            if (showImage && showImage !== "无") {
+                // 默认从 /images/song/ 加载
+                imageHtml = `
+                    <div style="margin-top: 15px; margin-left: 10px;">
+                        <p style="font-size: 0.8em; color: #8B1D1D; margin-bottom: 5px;">📜 呈上时空文献：</p>
+                        <img src="/images/${showImage}" alt="文献" style="max-width: 80%; border: 2px solid var(--border-gold); border-radius: 4px; box-shadow: 2px 2px 10px rgba(0,0,0,0.1);" onerror="this.src='/images/song/${showImage}'">
+                    </div>
+                `;
+            }
 
-    const cardHtml = `
-        <div class="chat-card">
-            <div class="agent-name">【${name}】</div>
-            <div class="agent-action">动作：${action}</div>
-            <div class="agent-dialogue">${dialogue}</div>
-            ${imageHtml}
-            ${contributionHtml}
-        </div>
-    `;
-    stream.insertAdjacentHTML('beforeend', cardHtml);
+            const cardHtml = `
+                <div class="chat-card">
+                    <div class="agent-name">【${name}】</div>
+                    <div class="agent-action">动作：${action}</div>
+                    <div class="agent-dialogue">${dialogue}</div>
+                    ${imageHtml}
+                    ${contributionHtml}
+                </div>
+            `;
+            stream.insertAdjacentHTML('beforeend', cardHtml);
+            scrollToBottom();
         }  
+
+        // 渲染导演的旁白
+        function appendNarrator(content) {
+            const stream = document.getElementById('chat-stream');
+            const html = `
+                <div class="chat-card narrator-card">
+                    <span>🎬 ${content}</span>
+                </div>
+            `;
+            stream.insertAdjacentHTML('beforeend', html);
+            scrollToBottom();
+        }
+
+        // 显示“思考中”动画
+        function appendThinking(name) {
+            removeThinking();
+            const stream = document.getElementById('chat-stream');
+            const html = `<div id="thinking-indicator" class="thinking-indicator">【${name}】的意识正在涌动...</div>`;
+            stream.insertAdjacentHTML('beforeend', html);
+            scrollToBottom();
+        }
+
+        // 移除思考动画
+        function removeThinking() {
+            const indicator = document.getElementById('thinking-indicator');
+            if (indicator) indicator.remove();
+        }
 
         function updateWorkspace(content) {
             document.getElementById('workspace').innerHTML = content.replace(/\n/g, '<br>');
+        }
+
+        function scrollToBottom() {
+            window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
         }
     </script>
 </body>

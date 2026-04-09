@@ -1,9 +1,14 @@
+# server.py
 import uvicorn
-from fastapi import FastAPI
+import json
+import asyncio
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
-from fastapi.staticfiles import StaticFiles  # 新增：用于提供图片文件
+from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel
 from scenario_manager import ScenarioManager
+from director import SpatiotemporalDirector
 
 app = FastAPI()
 
@@ -14,27 +19,68 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# 【关键】将我们的私有文献目录挂载到 /images 路由下，让网页可以读取图片
 app.mount("/images", StaticFiles(directory="data/raw_documents"), name="images")
 
-# 实例化全局引擎管理器并加载宋代世界
 manager = ScenarioManager()
 agents = manager.load_era("song")
+director = SpatiotemporalDirector(agents)
+
+# 新增：用于接收前端“神之旨意”（用户干预）的模型
+class Intervention(BaseModel):
+    message: str
+
+# 临时存储用户的干预信息
+current_intervention = None
 
 @app.get("/")
 async def get_index():
     return FileResponse("index.html")
 
-@app.post("/api/next")
-async def generate_next_round():
-    results = []
+@app.post("/api/intervene")
+async def post_intervention(intervention: Intervention):
+    """接收用户从前端发来的干预指令"""
+    global current_intervention
+    current_intervention = intervention.message
+    print(f"⚡ [系统警报] 接收到高维观察者的干预: {current_intervention}")
+    return {"status": "success", "message": "干预指令已注册，将在下一幕生效"}
+
+@app.get("/api/stream_next")
+async def stream_next_round():
+    """
+    升级版：使用 Server-Sent Events (SSE) 机制流式推送剧情。
+    这样前端就可以实现一个字一个字蹦出来的“打字机”效果。
+    """
+    global current_intervention
     
-    for agent in agents:
-        # 1. 获取动态物理环境
+    async def event_generator():
         env_text = manager.world_env.get_current_state_text()
         
-        # 2. 智能体思考
-        res = agent.generate_response(
+        # 将用户的干预信息秘密注入到环境文本中，让导演和智能体都能感知到
+        if current_intervention:
+            env_text += f"\n\n【⚠️来自高维时空（神）的低语⚠️】: {current_intervention}"
+            
+        direction = director.direct_next_scene(
+            manager.scene_desc, 
+            manager.current_dialogue, 
+            env_text
+        )
+        
+        next_speaker_name = direction.get("next_speaker")
+        narrator_event = direction.get("narrator_event", "无")
+        
+        if narrator_event and narrator_event != "无":
+            manager.current_dialogue += f"\n【旁白】: {narrator_event}"
+            yield f"data: {json.dumps({'type': 'narrator', 'content': narrator_event})}\n\n"
+            await asyncio.sleep(1) # 旁白后稍微停顿
+            
+        current_agent = next((a for a in agents if a.name == next_speaker_name), agents[0])
+        
+        # 通知前端：某某智能体正在思考
+        yield f"data: {json.dumps({'type': 'thinking', 'name': current_agent.name})}\n\n"
+        
+        # （由于你底层的 OpenAI 调用目前是阻塞的，真正的流式文本需要改底层。
+        # 这里我们模拟：先等完整结果出来，然后把结果按块推送给前端）
+        res = current_agent.generate_response(
             manager.scene_desc, 
             manager.current_task, 
             manager.shared_workspace, 
@@ -46,33 +92,36 @@ async def generate_next_round():
             action = res.get("action", "静坐")
             dialogue = res.get("dialogue", "...")
             contribution = res.get("contribution", "无")
-            show_image = res.get("show_image", "无")  # 新增：提取图片名字
+            show_image = res.get("show_image", "无") 
             env_impact = res.get("env_impact")
             
-            # 3. 改变世界物理状态
             if env_impact and isinstance(env_impact, dict):
-                manager.world_env.apply_impact(agent.name, env_impact)
+                manager.world_env.apply_impact(current_agent.name, env_impact)
             
-            # 4. 更新公共对话与协同产物
-            manager.current_dialogue = f"{agent.name}（{action}）：{dialogue}"
+            manager.current_dialogue += f"\n{current_agent.name}（{action}）：{dialogue}"
             if contribution != "无" and contribution not in manager.shared_workspace:
-                manager.shared_workspace += f"\n\n[{agent.name} 补充]: {contribution}"
+                manager.shared_workspace += f"\n\n[{current_agent.name} 补充]: {contribution}"
 
-            # 5. 打包返回给 HTML 前端
-            results.append({
-                "name": agent.name,
+            # 打包最终数据推给前端
+            payload = {
+                "type": "agent_action",
+                "name": current_agent.name,
                 "action": action,
                 "dialogue": dialogue,
                 "contribution": contribution,
-                "show_image": show_image,  # 把图片名发给前端
+                "show_image": show_image,
                 "workspace": manager.shared_workspace
-            })
+            }
+            yield f"data: {json.dumps(payload)}\n\n"
             
-    # 一轮结束，时间流逝
-    manager.world_env.advance_time()
-            
-    return {"status": "success", "results": results}
+        manager.world_env.advance_time()
+        
+        # 一幕演完，清空当前的干预指令
+        global current_intervention
+        current_intervention = None
+
+    return StreamingResponse(event_generator(), media_type="text/event-stream")
 
 if __name__ == "__main__":
-    print("🚀 息壤引擎后端启动！请在浏览器访问: http://localhost:8000")
+    print("🚀 息壤引擎流式后端启动！请在浏览器访问: http://localhost:8000")
     uvicorn.run(app, host="0.0.0.0", port=8000)

@@ -62,7 +62,7 @@ class LocalDocumentImporter:
             # 2. 文本清洗与智能切块 (Chunking)
             # 在真实的 RAG 中，如果把 10 万字的 PDF 直接丢进向量库会崩溃。
             # 我们必须把它切成一段段 500 字左右的“知识块”。
-            chunks = self._chunk_text(text_content, chunk_size=500, overlap=50)
+            chunks = self._chunk_text(text_content, max_chunk_size=500, overlap_sentences=1)
             
             # 3. 将切片后的私有资产固化到标准知识库中
             safe_name = file_name.rsplit('.', 1)[0]
@@ -87,23 +87,54 @@ class LocalDocumentImporter:
             print(f"❌ 读取 PDF 失败 {file_path}: {e}")
         return text
 
-    def _chunk_text(self, text, chunk_size=500, overlap=50):
+    def _chunk_text(self, text, max_chunk_size=500, overlap_sentences=1):
         """
-        滑窗切块算法：保证上下文语义不会在截断处丢失
+        升级版：中文语义级切块算法 (Semantic Chunking)
+        保证切出来的每一块不仅字数达标，而且语义完整、不断句。
         """
-        # 清洗掉多余的换行和空格
-        text = text.replace('\n', ' ').replace('\r', '')
-        words = text.split(' ') # 中文其实按字切更好，这里用简化的空格/字元混排策略
+        import re
         
-        # 简单暴力的按字符长度切分（加入 overlap 保证语义连贯）
+        # 1. 清洗掉多余的空格，但保留段落换行
+        text = re.sub(r'[ \t\r\f\v]+', ' ', text)
+        
+        # 2. 先按段落初切
+        paragraphs = re.split(r'\n+', text)
+        
         chunks = []
-        start = 0
-        while start < len(text):
-            end = min(start + chunk_size, len(text))
-            chunk = text[start:end]
-            chunks.append(chunk.strip())
-            start += (chunk_size - overlap) # 回退 overlap 个字符，实现滑窗
-            
+        current_chunk = []
+        current_length = 0
+
+        for p in paragraphs:
+            p = p.strip()
+            if not p: continue
+
+            # 3. 如果单段文字还是太长，按中文结束标点进一步切分为句子
+            sentences = re.split(r'([。！？；\.\!\?\;])', p)
+            # 将句子和后面的标点重新拼合
+            sentences = ["".join(i) for i in zip(sentences[0::2], sentences[1::2] + [""])]
+
+            for sentence in sentences:
+                sentence = sentence.strip()
+                if not sentence: continue
+
+                # 4. 判断加入当前句是否会超载
+                if current_length + len(sentence) <= max_chunk_size:
+                    current_chunk.append(sentence)
+                    current_length += len(sentence)
+                else:
+                    # 已经装满了，把当前拼好的块存入仓库
+                    if current_chunk:
+                        chunks.append("".join(current_chunk))
+                    
+                    # 5. 开启新的切块，并保留上一块的最后 N 句话作为上下文衔接 (Overlap)
+                    overlap = current_chunk[-overlap_sentences:] if overlap_sentences > 0 and current_chunk else []
+                    current_chunk = overlap + [sentence]
+                    current_length = sum(len(s) for s in current_chunk)
+
+        # 把最后剩下的收尾
+        if current_chunk:
+            chunks.append("".join(current_chunk))
+
         return chunks
 
 if __name__ == "__main__":
