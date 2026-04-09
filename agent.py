@@ -15,21 +15,23 @@ class SocialAgent:
         self.metrics = initial_metrics
         self.task_role = task_role
         self.memory = SocialMemory(name)
-        self.rag_engine = None # 预留外接知识引擎的接口
+        self.rag_engine = None 
 
     def mount_knowledge(self, rag_engine):
         self.rag_engine = rag_engine
 
-    def generate_response(self, scene_desc, current_task, shared_workspace, current_dialogue, env_state_text):
+    def generate_response_stream(self, scene_desc, current_task, shared_workspace, current_dialogue, env_state_text):
+        """核心升级：Token 级流式生成与后台状态同步"""
         relationships_str = json.dumps(self.memory.data["relationships"], ensure_ascii=False)
         
         # 1. 检索全局知识 (RAG)
         search_query = f"{current_task} {current_dialogue}"
         reference_knowledge = "无"
         if self.rag_engine:
+            # 传入当前剧本年份(如有)，这里预留了接口，你可以按需传入 current_year=xxx
             reference_knowledge = self.rag_engine.retrieve(search_query)
             
-        # 2. 唤醒个人专属情境记忆 (Vector Memory)
+        # 2. 唤醒个人专属情境与长效记忆 (Vector Memory)
         past_memories = self.memory.retrieve_episodic_memory(current_dialogue)
 
         system_prompt = f"""
@@ -76,14 +78,25 @@ class SocialAgent:
                 model=MODEL_NAME,
                 messages=[
                     {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": current_dialogue[-500:]} # 限制一下长度
+                    {"role": "user", "content": current_dialogue[-500:]} 
                 ],
                 temperature=0.7,
+                stream=True,  # ⚡ 开启大模型流式输出
                 timeout=30
             )
-            raw = response.choices[0].message.content
             
-            # 处理 markdown 包裹问题
+            raw_full_text = ""
+            
+            # ⚡ 实时抛出 Token 给前端
+            for chunk in response:
+                if chunk.choices[0].delta.content:
+                    token = chunk.choices[0].delta.content
+                    raw_full_text += token
+                    # 将 Token 吐给外层（server.py）
+                    yield {"type": "token", "content": token}
+            
+            # --- 文本流传输完毕后，在后台进行数据解析与记忆落盘 ---
+            raw = raw_full_text.strip()
             if raw.startswith("```json"): 
                 raw = raw[7:-3].strip()
             elif raw.startswith("```"): 
@@ -99,17 +112,20 @@ class SocialAgent:
                     self.memory.update_relationship(target, changes.get("affinity", 0), changes.get("trust", 0))
                 self.memory.save()
                 
-                # ====== 新增：动作发生后，写入长期记忆库 ======
+                # 写入长期记忆库 (触发折叠衰退机制)
                 self.memory.add_episodic_memory(
                     env_state=env_state_text,
                     action=res.get("action", ""),
                     dialogue=res.get("dialogue", "")
                 )
                 
-                # 你可以在控制台打印一下心智理论的推理过程，非常有趣！
-                print(f"🧩 [{self.name} 的揣测]: {res.get('perception_of_others', '')}")
+                print(f"🧩 [{self.name} 的心智推演已完成落盘]")
                 
-                return res
+                # 抛出最终解析好的完整 JSON 对象，供前端更新 UI 卡片
+                yield {"type": "done", "parsed_data": res}
+            else:
+                yield {"type": "error", "content": "JSON 结构解析失败"}
+                
         except Exception as e:
             print(f"[{self.name}] 引擎出错: {e}")
-        return None
+            yield {"type": "error", "content": str(e)}

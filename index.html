@@ -50,20 +50,26 @@
             width: 80%;
             margin: 0 auto 30px;
             text-align: center;
-            padding: 20px;
+            padding: 30px 20px;
             background: rgba(255, 255, 255, 0.5);
             border: 1px dashed var(--border-gold);
             border-radius: 8px;
         }
         
-        .creation-panel input {
+        .creation-panel h3 {
+            color: var(--accent-red);
+            margin-top: 0;
+        }
+
+        .creation-panel input, .creation-panel select {
             padding: 10px 15px;
-            width: 50%;
-            font-size: 1.1em;
+            font-size: 1.05em;
             border: 1px solid var(--border-gold);
             border-radius: 4px;
             margin-right: 10px;
             font-family: 'Noto Serif SC', serif;
+            color: var(--text-ink);
+            background: rgba(255,255,255,0.8);
         }
 
         .container {
@@ -79,7 +85,7 @@
             display: flex;
             flex-direction: column;
             gap: 20px;
-            padding-bottom: 180px; /* 增加底部留白 */
+            padding-bottom: 180px;
         }
 
         .chat-card {
@@ -164,6 +170,16 @@
             animation: pulse 1.5s infinite;
         }
 
+        .typing-cursor {
+            display: inline-block;
+            width: 8px;
+            height: 1.2em;
+            background-color: var(--accent-red);
+            vertical-align: middle;
+            margin-left: 4px;
+            animation: blink 1s step-end infinite;
+        }
+
         .artifacts-panel {
             flex: 1;
             position: sticky;
@@ -190,7 +206,6 @@
             font-size: 1.1em;
         }
 
-        /* 增强的底部控制台样式 */
         .controls {
             position: fixed;
             bottom: 0;
@@ -208,7 +223,6 @@
             box-shadow: 0 -5px 20px rgba(0,0,0,0.05);
         }
 
-        /* 模式切换按钮 */
         .mode-switch {
             display: flex;
             gap: 15px;
@@ -258,28 +272,24 @@
             border-color: var(--accent-red);
         }
 
-        .intervention-box input::placeholder {
-            color: #aaa;
-        }
-
         .intervention-box button {
             background-color: transparent;
             border: 1px solid var(--accent-red);
             color: var(--accent-red);
             padding: 8px 15px;
+            cursor: pointer;
         }
         
         .intervention-box button:hover {
             background-color: rgba(139, 29, 29, 0.1);
-            box-shadow: none;
         }
 
         .advance-btn {
             background-color: var(--accent-red);
             color: #FDF6E3;
             border: none;
-            padding: 10px 40px;
-            font-size: 1.1em;
+            padding: 10px 30px;
+            font-size: 1.05em;
             font-family: 'Noto Serif SC', serif;
             cursor: pointer;
             transition: all 0.3s;
@@ -298,6 +308,15 @@
             box-shadow: none;
         }
 
+        /* 唤醒按钮特殊颜色 */
+        .btn-resume {
+            background-color: #2C3E50;
+        }
+        .btn-resume:hover {
+            background-color: #1a252f;
+            box-shadow: 0 4px 10px rgba(44,62,80,0.3);
+        }
+
         @keyframes fadeIn {
             to { opacity: 1; transform: translateY(0); }
         }
@@ -306,6 +325,10 @@
             0% { opacity: 0.5; }
             50% { opacity: 1; }
             100% { opacity: 0.5; }
+        }
+
+        @keyframes blink { 
+            50% { opacity: 0; } 
         }
         
         .hidden {
@@ -317,48 +340,56 @@
 
     <div class="header">
         <h1>息 壤</h1>
-        <p>生成式人文时空计算底座</p>
+        <p>生成式人文时空计算底座 · 浩瀚绿洲</p>
     </div>
 
-    <!-- 创世控制台 -->
     <div class="creation-panel" id="creationPanel">
-        <h3>开辟新平行时空</h3>
-        <p style="color: #777; font-size: 0.9em; margin-bottom: 20px;">输入一个历史场景主题，大模型将为您动态生成环境、剧本与人物。</p>
-        <div>
-            <input type="text" id="worldThemeInput" placeholder="例如：明朝万历年间，江南茶馆里商人们谈论海禁...">
-            <button class="advance-btn" id="createWorldBtn" onclick="createNewWorld()">创世 (Create)</button>
+        <h3>🌌 开辟新时空</h3>
+        <p style="color: #777; font-size: 0.9em; margin-bottom: 20px;">输入主题与风格，大模型将为您动态生成世界观、环境与NPC网络。</p>
+        
+        <div style="margin-bottom: 25px;">
+            <input type="text" id="worldThemeInput" placeholder="主题，如：明朝万历年间，江南茶馆..." style="width: 40%;">
+            <select id="worldGenreInput">
+                <option value="历史客观写实">📜 历史客观写实</option>
+                <option value="宫廷权谋/政治">🗡️ 宫廷权谋/政治</option>
+                <option value="市井烟火">🏮 市井烟火</option>
+                <option value="凄美宿命/红楼梦">🌸 凄美宿命/红楼梦</option>
+            </select>
+            <button class="advance-btn" id="createWorldBtn" onclick="createNewWorld()">创世</button>
         </div>
-        <div id="creationStatus" style="margin-top: 15px; color: var(--accent-red); font-weight: bold; font-style: italic;"></div>
+        
+        <hr style="border: none; border-top: 1px dashed var(--border-gold); margin: 25px auto; width: 60%;">
+        
+        <h3>🔄 唤醒旧日时空</h3>
+        <p style="color: #777; font-size: 0.9em; margin-bottom: 20px;">输入之前离开时的 Session ID，无缝读取世界进度、物理环境与NPC记忆。</p>
+        <div>
+            <input type="text" id="resumeSessionId" placeholder="输入已存在的 Session ID (如 session_123abc)..." style="width: 50%;">
+            <button class="advance-btn btn-resume" id="resumeWorldBtn" onclick="resumeWorld()">唤醒</button>
+        </div>
+
+        <div id="creationStatus" style="margin-top: 20px; color: var(--accent-red); font-weight: bold; font-style: italic;"></div>
     </div>
 
-    <!-- 交互主体区域（初始隐藏） -->
     <div class="container hidden" id="mainContainer">
-        <div class="deduction-stream" id="chat-stream">
-            <!-- 动态生成的背景会插在这里 -->
-        </div>
+        <div class="deduction-stream" id="chat-stream"></div>
 
         <div class="artifacts-panel">
-            <h3 id="workspaceTitle">协同资产</h3>
+            <h3 id="workspaceTitle">时空焦点产物</h3>
             <div class="workspace-content" id="workspace">等待生成...</div>
         </div>
     </div>
 
-    <!-- 底部控制台与干预面板（初始隐藏） -->
     <div class="controls hidden" id="controlsPanel">
-        
-        <!-- 模式切换器 -->
         <div class="mode-switch">
             <button id="godModeBtn" class="active" onclick="switchMode('god')">⚡ 上帝环境干预</button>
             <button id="playerModeBtn" onclick="switchMode('player')">👤 玩家化身入局</button>
         </div>
 
-        <!-- 上帝干预面板 -->
         <div class="intervention-box" id="godPanel">
             <input type="text" id="interventionInput" placeholder="在此输入高维指令（如：忽然一阵冷风吹开了窗户）...">
             <button onclick="sendIntervention()">降下神谕</button>
         </div>
 
-        <!-- 玩家扮演面板 -->
         <div class="intervention-box hidden" id="playerPanel">
             <input type="text" id="playerAction" placeholder="你的动作 (如: 走上前作揖)" style="flex: 0.3;">
             <input type="text" id="playerDialogue" placeholder="对他们说点什么..." style="flex: 0.7;">
@@ -371,12 +402,14 @@
     <script>
         let currentSessionId = ""; 
 
-        // 调用创世 API
         async function createNewWorld() {
             const themeInput = document.getElementById('worldThemeInput');
+            const genreInput = document.getElementById('worldGenreInput');
             const btn = document.getElementById('createWorldBtn');
             const statusDiv = document.getElementById('creationStatus');
+            
             const theme = themeInput.value.trim();
+            const genre = genreInput.value;
 
             if (!theme) {
                 alert("请输入要创世的主题！");
@@ -387,21 +420,18 @@
             statusDiv.innerText = "🌌 正在连接高维大模型进行世界推演，请耐心等待（约 10-20 秒）...";
 
             try {
+                // ⚡ 将风格也传给后端
                 const response = await fetch('/api/create_world', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ theme: theme })
+                    body: JSON.stringify({ theme: theme, genre: genre })
                 });
 
                 const data = await response.json();
 
                 if (data.status === "success") {
                     currentSessionId = data.session_id;
-                    
-                    document.getElementById('creationPanel').classList.add('hidden');
-                    document.getElementById('mainContainer').classList.remove('hidden');
-                    document.getElementById('controlsPanel').classList.remove('hidden');
-
+                    enterWorldMode();
                     initWorldUI(data);
                 } else {
                     statusDiv.innerText = "❌ 创世失败：" + data.message;
@@ -414,16 +444,44 @@
             }
         }
 
+        // ⚡ 核心逻辑：唤醒旧日时空
+        function resumeWorld() {
+            const sidInput = document.getElementById('resumeSessionId');
+            const sid = sidInput.value.trim();
+            const statusDiv = document.getElementById('creationStatus');
+
+            if (!sid) {
+                alert("请输入要唤醒的 Session ID！");
+                return;
+            }
+
+            currentSessionId = sid;
+            enterWorldMode();
+            
+            const stream = document.getElementById('chat-stream');
+            stream.innerHTML = '';
+            appendNarrator(`时空坐标锁定完毕。正在从硬盘深处唤醒 [${sid}] 的世界进度与物理法则...`);
+            
+            // 自动触发下一回合，拉取数据
+            nextRound();
+        }
+
+        function enterWorldMode() {
+            document.getElementById('creationPanel').classList.add('hidden');
+            document.getElementById('mainContainer').classList.remove('hidden');
+            document.getElementById('controlsPanel').classList.remove('hidden');
+        }
+
         function initWorldUI(data) {
             const stream = document.getElementById('chat-stream');
             stream.innerHTML = ''; 
             
             const bgCardHtml = `
                 <div class="chat-card">
-                    <div class="agent-name">【时空背景】 (Session: ${data.session_id})</div>
+                    <div class="agent-name">【时空背景】 (当前坐标: <span style="user-select:all; background:#eee; padding:2px 5px; border-radius:3px;">${data.session_id}</span>)</div>
                     <div class="agent-dialogue" style="white-space: pre-wrap;">${data.scene_desc}</div>
                     <div style="margin-top: 15px; font-size: 0.9em; color: #666; font-style: italic;">
-                        唤醒角色：${data.agents.join("、")}，以及神秘访客（你）
+                        唤醒角色：${data.agents.join("、")}，以及异乡人（你）。请妥善保管上述坐标(Session ID)以便下次返回。
                     </div>
                 </div>
             `;
@@ -440,7 +498,6 @@
             }
         }
 
-        // 切换 UI 模式
         function switchMode(mode) {
             const godBtn = document.getElementById('godModeBtn');
             const playerBtn = document.getElementById('playerModeBtn');
@@ -460,9 +517,8 @@
             }
         }
 
-        // 1. 上帝干预指令发送
         async function sendIntervention() {
-            if (!currentSessionId) { alert("世界尚未生成！"); return; }
+            if (!currentSessionId) return;
             const input = document.getElementById('interventionInput');
             const msg = input.value.trim();
             if(!msg) return;
@@ -473,25 +529,21 @@
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ message: msg, session_id: currentSessionId }) 
                 });
-                
                 input.value = '';
                 input.placeholder = "⚡ 神谕已下达，将在下一幕触发...";
                 setTimeout(() => input.placeholder = "在此输入高维指令...", 3000);
-            } catch (error) {
-                alert("干预失败，后端服务未响应！");
-            }
+            } catch (error) {}
         }
 
-        // 2. 玩家化身发言发送
         async function sendPlayerAction() {
-            if (!currentSessionId) { alert("世界尚未生成！"); return; }
+            if (!currentSessionId) return;
 
             const actionInput = document.getElementById('playerAction');
             const dialogueInput = document.getElementById('playerDialogue');
             const action = actionInput.value.trim() || "看着大家";
             const dialogue = dialogueInput.value.trim();
 
-            if(!dialogue) { alert("台词不能为空哦！"); return; }
+            if(!dialogue) return;
 
             try {
                 await fetch('/api/player_act', {
@@ -504,27 +556,20 @@
                     }) 
                 });
                 
-                // 立即在前端渲染出玩家自己的专属样式卡片
                 appendChatCard("异乡人（你）", action, dialogue, "无", "无", true);
                 
                 actionInput.value = '';
                 dialogueInput.value = '';
-                
-                // 【点睛之笔】玩家发完言后，系统自动运转，让 NPC 立刻回应
                 nextRound();
-
-            } catch (error) {
-                alert("化身入局失败，后端服务未响应！");
-            }
+            } catch (error) {}
         }
 
-        // 推进回合 (SSE)
         function nextRound() {
             if (!currentSessionId) return;
 
             const btn = document.getElementById('nextBtn');
             btn.disabled = true;
-            btn.innerText = "时空正在流转...";
+            btn.innerText = "时空法则正在演算...";
             removeThinking();
 
             const eventSource = new EventSource('/api/stream_next/' + currentSessionId);
@@ -537,9 +582,13 @@
                 } 
                 else if (data.type === 'thinking') {
                     appendThinking(data.name);
+                }
+                else if (data.type === 'stream_token') {
+                    removeThinking();
+                    appendOrUpdateStreamCard(data.name, data.content);
                 } 
                 else if (data.type === 'agent_action') {
-                    removeThinking();
+                    removeStreamCard();
                     appendChatCard(data.name, data.action, data.dialogue, data.contribution, data.show_image);
                     updateWorkspace(data.workspace);
                     eventSource.close();
@@ -547,12 +596,12 @@
                 }
             };
 
-            eventSource.onerror = function(err) {
-                console.error("流式连接错误:", err);
+            eventSource.onerror = function() {
                 eventSource.close();
                 removeThinking();
+                removeStreamCard();
                 resetButton();
-                appendNarrator("【系统】时空波动异常，连接中断。");
+                appendNarrator("【系统】时空波动异常，演算暂时中断。");
             };
             
             function resetButton() {
@@ -562,24 +611,53 @@
             }
         }
 
-        // 渲染对话卡片 (增加 isPlayer 标识支持)
+        function appendOrUpdateStreamCard(name, token) {
+            let streamCard = document.getElementById('streaming-card');
+            let contentDiv;
+            
+            if (!streamCard) {
+                const stream = document.getElementById('chat-stream');
+                const cardHtml = `
+                    <div class="chat-card" id="streaming-card" style="border-left-color: var(--accent-red);">
+                        <div class="agent-name">【${name}】<span style="font-size: 0.7em; color: #7F8C8D; font-weight: normal; margin-left: 10px;">(神识推演中...)</span></div>
+                        <div class="agent-dialogue" style="font-family: monospace; white-space: pre-wrap; font-size: 0.95em; color: #555;" id="streaming-content"></div>
+                    </div>
+                `;
+                stream.insertAdjacentHTML('beforeend', cardHtml);
+                streamCard = document.getElementById('streaming-card');
+                contentDiv = document.getElementById('streaming-content');
+            } else {
+                contentDiv = document.getElementById('streaming-content');
+            }
+
+            const oldCursor = document.getElementById('typing-cursor');
+            if (oldCursor) oldCursor.remove();
+
+            contentDiv.appendChild(document.createTextNode(token));
+            contentDiv.insertAdjacentHTML('beforeend', '<span class="typing-cursor" id="typing-cursor"></span>');
+            scrollToBottom();
+        }
+
+        function removeStreamCard() {
+            const card = document.getElementById('streaming-card');
+            if (card) card.remove();
+        }
+
         function appendChatCard(name, action, dialogue, contribution, showImage, isPlayer = false) {
             const stream = document.getElementById('chat-stream');
             
             let contributionHtml = contribution && contribution !== "无" 
-                ? `<div class="agent-contribution">[任务补充]：${contribution}</div>` : '';
+                ? `<div class="agent-contribution">[产物变化]：${contribution}</div>` : '';
 
             let imageHtml = '';
             if (showImage && showImage !== "无") {
                 imageHtml = `
                     <div style="margin-top: 15px; margin-left: 10px;">
-                        <p style="font-size: 0.8em; color: #8B1D1D; margin-bottom: 5px;">📜 呈上时空文献：</p>
-                        <img src="/images/${showImage}" alt="文献" style="max-width: 80%; border: 2px solid var(--border-gold); border-radius: 4px; box-shadow: 2px 2px 10px rgba(0,0,0,0.1);" onerror="this.src='/images/song/${showImage}'">
+                        <img src="/images/${showImage}" style="max-width: 80%; border: 2px solid var(--border-gold); border-radius: 4px; box-shadow: 2px 2px 10px rgba(0,0,0,0.1);" onerror="this.src='/images/song/${showImage}'">
                     </div>
                 `;
             }
 
-            // 如果是玩家自己的发言，卡片颜色进行反转特殊处理
             const borderStyle = isPlayer ? 'border-color: #2C3E50; border-width: 2px;' : '';
             const nameColor = isPlayer ? 'color: #2C3E50;' : '';
             const bgStyle = isPlayer ? 'background: #F4F7F6;' : '';
