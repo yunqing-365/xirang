@@ -222,7 +222,7 @@
                 if(data.status === "success") {
                     data.results.forEach((res, index) => {
                         setTimeout(() => {
-                            appendChatCard(res.name, res.action, res.dialogue, res.contribution);
+                            appendChatCard(res.name, res.action, res.dialogue, res.contribution, res.show_image);
                             updateWorkspace(res.workspace);
                         }, index * 1000); // 错开显示时间，增加呼吸感
                     });
@@ -238,21 +238,35 @@
             }
         }
 
-        function appendChatCard(name, action, dialogue, contribution) {
-            const stream = document.getElementById('chat-stream');
-            let contributionHtml = contribution && contribution !== "无" 
-                ? `<div class="agent-contribution">[任务补充]：${contribution}</div>` : '';
+        function appendChatCard(name, action, dialogue, contribution, showImage) {
+    const stream = document.getElementById('chat-stream');
+    
+    // 处理文本贡献
+    let contributionHtml = contribution && contribution !== "无" 
+        ? `<div class="agent-contribution">[任务补充]：${contribution}</div>` : '';
 
-            const cardHtml = `
-                <div class="chat-card">
-                    <div class="agent-name">【${name}】</div>
-                    <div class="agent-action">动作：${action}</div>
-                    <div class="agent-dialogue">${dialogue}</div>
-                    ${contributionHtml}
-                </div>
-            `;
-            stream.insertAdjacentHTML('beforeend', cardHtml);
-        }
+    // 【新增】处理图片展示。假设它属于 song 时代
+    let imageHtml = '';
+    if (showImage && showImage !== "无") {
+        imageHtml = `
+            <div style="margin-top: 15px; margin-left: 10px;">
+                <p style="font-size: 0.8em; color: #8B1D1D; margin-bottom: 5px;">📜 呈上时空文献：</p>
+                <img src="/images/song/${showImage}" alt="文献" style="max-width: 80%; border: 2px solid var(--border-gold); border-radius: 4px; box-shadow: 2px 2px 10px rgba(0,0,0,0.1);">
+            </div>
+        `;
+    }
+
+    const cardHtml = `
+        <div class="chat-card">
+            <div class="agent-name">【${name}】</div>
+            <div class="agent-action">动作：${action}</div>
+            <div class="agent-dialogue">${dialogue}</div>
+            ${imageHtml}
+            ${contributionHtml}
+        </div>
+    `;
+    stream.insertAdjacentHTML('beforeend', cardHtml);
+        }  
 
         function updateWorkspace(content) {
             document.getElementById('workspace').innerHTML = content.replace(/\n/g, '<br>');

@@ -1,0 +1,43 @@
+{
+    "entities": [
+        "临皋亭",
+        "佛印和尚",
+        "金山寺",
+        "东坡肉",
+        "苏轼",
+        "王朝云",
+        "黄州"
+    ],
+    "relationships": [
+        {
+            "source": "苏轼",
+            "target": "黄州",
+            "relation": "被贬谪至"
+        },
+        {
+            "source": "苏轼",
+            "target": "东坡肉",
+            "relation": "发明了"
+        },
+        {
+            "source": "苏轼",
+            "target": "临皋亭",
+            "relation": "居所是"
+        },
+        {
+            "source": "王朝云",
+            "target": "苏轼",
+            "relation": "是红颜知己"
+        },
+        {
+            "source": "佛印和尚",
+            "target": "苏轼",
+            "relation": "是至交好友"
+        },
+        {
+            "source": "佛印和尚",
+            "target": "金山寺",
+            "relation": "属于"
+        }
+    ]
+}

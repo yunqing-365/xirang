@@ -8,17 +8,33 @@ from memory import SocialMemory
 client = OpenAI(api_key=API_KEY, base_url=BASE_URL)
 
 class SocialAgent:
+    # 修改 agent.py (部分代码展示，替换原有的 generate_response)
+
+    # 1. 在 __init__ 中增加 rag_engine 属性
     def __init__(self, name, identity, personality, initial_metrics, task_role):
         self.name = name
         self.identity = identity
         self.personality = personality
         self.metrics = initial_metrics
-        self.task_role = task_role  # 【新增】在团队协同中的具体职责
+        self.task_role = task_role
         self.memory = SocialMemory(name)
+        self.rag_engine = None # 预留外接知识引擎的接口
 
-    def generate_response(self, scene_desc, current_task, shared_workspace, current_dialogue):
+    # 2. 新增一个挂载引擎的方法
+    def mount_knowledge(self, rag_engine):
+        self.rag_engine = rag_engine
+
+    # 3. 升级 generate_response
+    def generate_response(self, scene_desc, current_task, shared_workspace, current_dialogue, env_state_text):
         relationships_str = json.dumps(self.memory.data["relationships"], ensure_ascii=False)
         
+        # === 【RAG 检索动作】 ===
+        # 根据当前的场景和对话，去知识库搜索线索
+        search_query = f"{current_task} {current_dialogue}"
+        reference_knowledge = "无"
+        if self.rag_engine:
+            reference_knowledge = self.rag_engine.retrieve(search_query)
+        # =========================
         system_prompt = f"""
 你是【{self.name}】。
 身份：{self.identity}
@@ -28,27 +44,33 @@ class SocialAgent:
 【社会关系记忆】: {relationships_str}
 【当前场景】: {scene_desc}
 
+=== 动态物理环境 ===
+{env_state_text}
+
+=== 专属时空知识检索结果 ===
+（以下是系统为你检索到的相关记忆或知识。💡提示：如果其中包含类似【视觉文献来源：xxx.jpg】的标记，说明这是你可以直接向大家展示的画作或实物！）
+{reference_knowledge}
+
 === 协同任务系统 ===
 【团队共同任务】: {current_task}
 【你在团队中的职责】: {self.task_role}
-【当前的团队协作产出物(如草稿/计划)】: {shared_workspace}
-
-任务要求：
-根据你的性格、对他人的印象以及你的【职责】，与其他智能体协同推进任务。
-你可以提出修改意见、直接贡献内容，或者给予情绪支持。
+【当前的团队协作产出物】: {shared_workspace}
 
 必须以纯 JSON 格式输出：
 {{
-    "thought": "对当前任务进度和社交局势的分析",
-    "target": "你话语的对象（所有人或特定某人）",
+    "thought": "对当前任务进度和感官环境的分析",
+    "target": "你话语的对象",
     "action": "动作描写",
     "dialogue": "台词",
-    "contribution": "你对协同任务做出的实质性补充或修改建议（如果没有则填无）",
-    "social_impact": {{
-        "对象名": {{"affinity": 变化值, "trust": 变化值}}
-    }}
+    "contribution": "对协作产出的实质性补充（无则填无）",
+    "show_image": "如果你想展示知识库中提到的视觉文献，请提取其文件名（如 xxx.jpg），如果没有则填 无",
+    "env_impact": {{"环境参数名": "改变后的状态"}},
+    "social_impact": {{"对象名": {{"affinity": 变化值, "trust": 变化值}}}}
 }}
 """
+
+        # ... (下方调用 OpenAI 的代码保持不变) ...
+
         try:
             response = client.chat.completions.create(
                 model=MODEL_NAME,
