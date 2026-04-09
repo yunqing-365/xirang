@@ -2,6 +2,7 @@
 import uvicorn
 import json
 import asyncio
+import uuid
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, StreamingResponse
@@ -21,43 +22,102 @@ app.add_middleware(
 
 app.mount("/images", StaticFiles(directory="data/raw_documents"), name="images")
 
-manager = ScenarioManager()
-agents = manager.load_era("song")
-director = SpatiotemporalDirector(agents)
+# 移除全局的 manager 和 agents，改为基于 session 管理
+# manager = ScenarioManager()
+# agents = manager.load_era("song")
+# director = SpatiotemporalDirector(agents)
 
-# 新增：用于接收前端“神之旨意”（用户干预）的模型
+# 临时存储活跃的会话和干预信息
+active_sessions = {}
+current_intervention = {} # 改为字典，支持多 session
+
+# 新增：用于接收前端创建世界请求的模型
+class WorldCreationRequest(BaseModel):
+    theme: str
+
 class Intervention(BaseModel):
     message: str
-
-# 临时存储用户的干预信息
-current_intervention = None
+    session_id: str = "default" # 默认 session
 
 @app.get("/")
 async def get_index():
     return FileResponse("index.html")
 
+# ====== 新增：创世 API ======
+@app.post("/api/create_world")
+async def create_world(req: WorldCreationRequest):
+    """根据主题，动态生成一个全新的沙盒宇宙"""
+    session_id = f"session_{uuid.uuid4().hex[:8]}"
+    
+    manager = ScenarioManager()
+    # 调用我们刚刚在 scenario_manager 中写的动态生成逻辑
+    result_session = manager.generate_dynamic_scenario(req.theme, session_id)
+    
+    if not result_session:
+        return {"status": "error", "message": "世界生成失败"}
+        
+    # 加载这个新生成的世界
+    agents = manager.load_era(result_session)
+    director = SpatiotemporalDirector(agents)
+    
+    # 存入活跃会话
+    active_sessions[session_id] = {
+        "manager": manager,
+        "agents": agents,
+        "director": director
+    }
+    
+    # 初始化环境并返回给前端展示
+    env_text = manager.world_env.get_current_state_text()
+    
+    return {
+        "status": "success", 
+        "session_id": session_id,
+        "scene_desc": manager.scene_desc,
+        "initial_dialogue": manager.current_dialogue,
+        "agents": [a.name for a in agents]
+    }
+# ============================
+
 @app.post("/api/intervene")
 async def post_intervention(intervention: Intervention):
     """接收用户从前端发来的干预指令"""
     global current_intervention
-    current_intervention = intervention.message
-    print(f"⚡ [系统警报] 接收到高维观察者的干预: {current_intervention}")
+    current_intervention[intervention.session_id] = intervention.message
+    print(f"⚡ [系统警报] 接收到高维观察者的干预 (Session: {intervention.session_id}): {intervention.message}")
     return {"status": "success", "message": "干预指令已注册，将在下一幕生效"}
 
-@app.get("/api/stream_next")
-async def stream_next_round():
+# 修改流式接口以支持 Session
+@app.get("/api/stream_next/{session_id}")
+async def stream_next_round(session_id: str):
     """
-    升级版：使用 Server-Sent Events (SSE) 机制流式推送剧情。
-    这样前端就可以实现一个字一个字蹦出来的“打字机”效果。
+    升级版：支持多世界的流式推送。
     """
+    if session_id not in active_sessions:
+        # 为了兼容之前的测试，如果找不到 session，尝试加载默认的宋代剧本
+        manager = ScenarioManager()
+        agents = manager.load_era("song")
+        director = SpatiotemporalDirector(agents)
+        active_sessions[session_id] = {
+            "manager": manager,
+            "agents": agents,
+            "director": director
+        }
+
+    session_data = active_sessions[session_id]
+    manager = session_data["manager"]
+    agents = session_data["agents"]
+    director = session_data["director"]
+
     global current_intervention
     
     async def event_generator():
         env_text = manager.world_env.get_current_state_text()
         
-        # 将用户的干预信息秘密注入到环境文本中，让导演和智能体都能感知到
-        if current_intervention:
-            env_text += f"\n\n【⚠️来自高维时空（神）的低语⚠️】: {current_intervention}"
+        # 获取该 session 的干预指令
+        intervention_msg = current_intervention.get(session_id)
+        if intervention_msg:
+            env_text += f"\n\n【⚠️来自高维时空（神）的低语⚠️】: {intervention_msg}"
             
         direction = director.direct_next_scene(
             manager.scene_desc, 
@@ -71,15 +131,12 @@ async def stream_next_round():
         if narrator_event and narrator_event != "无":
             manager.current_dialogue += f"\n【旁白】: {narrator_event}"
             yield f"data: {json.dumps({'type': 'narrator', 'content': narrator_event})}\n\n"
-            await asyncio.sleep(1) # 旁白后稍微停顿
+            await asyncio.sleep(1) 
             
         current_agent = next((a for a in agents if a.name == next_speaker_name), agents[0])
         
-        # 通知前端：某某智能体正在思考
         yield f"data: {json.dumps({'type': 'thinking', 'name': current_agent.name})}\n\n"
         
-        # （由于你底层的 OpenAI 调用目前是阻塞的，真正的流式文本需要改底层。
-        # 这里我们模拟：先等完整结果出来，然后把结果按块推送给前端）
         res = current_agent.generate_response(
             manager.scene_desc, 
             manager.current_task, 
@@ -102,7 +159,6 @@ async def stream_next_round():
             if contribution != "无" and contribution not in manager.shared_workspace:
                 manager.shared_workspace += f"\n\n[{current_agent.name} 补充]: {contribution}"
 
-            # 打包最终数据推给前端
             payload = {
                 "type": "agent_action",
                 "name": current_agent.name,
@@ -116,9 +172,9 @@ async def stream_next_round():
             
         manager.world_env.advance_time()
         
-        # 一幕演完，清空当前的干预指令
-        global current_intervention
-        current_intervention = None
+        # 清空该 session 的干预
+        if session_id in current_intervention:
+            del current_intervention[session_id]
 
     return StreamingResponse(event_generator(), media_type="text/event-stream")
 
