@@ -42,15 +42,23 @@ class ScenarioManager:
             if file_name.endswith('.json') and file_name != 'scene.json':
                 agent_file = os.path.join(era_path, file_name)
                 with open(agent_file, 'r', encoding='utf-8') as f:
-                    agent_data = json.load(f)
-                    agent = SocialAgent(
-                        name=agent_data['name'],
-                        identity=agent_data['identity'],
-                        personality=agent_data['personality'],
-                        initial_metrics=agent_data['initial_metrics'],
-                        task_role=agent_data['task_role']
-                    )
-                    self.agents.append(agent)
+                    try:
+                        agent_data = json.load(f)
+                        
+                        # 终极防御：如果 JSON 里根本没有 'name' 字段，说明它绝不是人物设定文件，直接跳过！
+                        if 'name' not in agent_data:
+                            continue
+                            
+                        agent = SocialAgent(
+                            name=agent_data['name'],
+                            identity=agent_data['identity'],
+                            personality=agent_data['personality'],
+                            initial_metrics=agent_data['initial_metrics'],
+                            task_role=agent_data['task_role']
+                        )
+                        self.agents.append(agent)
+                    except Exception as e:
+                        print(f"⚠️ 跳过无法解析的文件 {file_name}: {e}")
                     
         # 3. 挂载 RAG 引擎
         knowledge_engine = KnowledgeRetriever(era_folder_name)

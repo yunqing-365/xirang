@@ -8,9 +8,6 @@ from memory import SocialMemory
 client = OpenAI(api_key=API_KEY, base_url=BASE_URL)
 
 class SocialAgent:
-    # 修改 agent.py (部分代码展示，替换原有的 generate_response)
-
-    # 1. 在 __init__ 中增加 rag_engine 属性
     def __init__(self, name, identity, personality, initial_metrics, task_role):
         self.name = name
         self.identity = identity
@@ -20,21 +17,21 @@ class SocialAgent:
         self.memory = SocialMemory(name)
         self.rag_engine = None # 预留外接知识引擎的接口
 
-    # 2. 新增一个挂载引擎的方法
     def mount_knowledge(self, rag_engine):
         self.rag_engine = rag_engine
 
-    # 3. 升级 generate_response
     def generate_response(self, scene_desc, current_task, shared_workspace, current_dialogue, env_state_text):
         relationships_str = json.dumps(self.memory.data["relationships"], ensure_ascii=False)
         
-        # === 【RAG 检索动作】 ===
-        # 根据当前的场景和对话，去知识库搜索线索
+        # 1. 检索全局知识 (RAG)
         search_query = f"{current_task} {current_dialogue}"
         reference_knowledge = "无"
         if self.rag_engine:
             reference_knowledge = self.rag_engine.retrieve(search_query)
-        # =========================
+            
+        # 2. 唤醒个人专属情境记忆 (Vector Memory)
+        past_memories = self.memory.retrieve_episodic_memory(current_dialogue)
+
         system_prompt = f"""
 你是【{self.name}】。
 身份：{self.identity}
@@ -51,6 +48,10 @@ class SocialAgent:
 （以下是系统为你检索到的相关记忆或知识。💡提示：如果其中包含类似【视觉文献来源：xxx.jpg】的标记，说明这是你可以直接向大家展示的画作或实物！）
 {reference_knowledge}
 
+=== 【你的往昔记忆涌上心头】 ===
+以下是你过去经历过的相关情境，可作为你当前对话的情感和事实参考：
+{past_memories}
+
 === 协同任务系统 ===
 【团队共同任务】: {current_task}
 【你在团队中的职责】: {self.task_role}
@@ -58,10 +59,11 @@ class SocialAgent:
 
 必须以纯 JSON 格式输出：
 {{
-    "thought": "对当前任务进度和感官环境的分析",
+    "perception_of_others": "【心智理论】推测当前环境中其他人的心理状态、情绪或潜在意图",
+    "thought": "结合他人意图、你的往昔记忆以及感官环境，进行下一步的行动分析",
     "target": "你话语的对象",
     "action": "动作描写",
-    "dialogue": "台词",
+    "dialogue": "台词（可以适当感叹或呼应记忆中的往事）",
     "contribution": "对协作产出的实质性补充（无则填无）",
     "show_image": "如果你想展示知识库中提到的视觉文献，请提取其文件名（如 xxx.jpg），如果没有则填 无",
     "env_impact": {{"环境参数名": "改变后的状态"}},
@@ -69,19 +71,24 @@ class SocialAgent:
 }}
 """
 
-        # ... (下方调用 OpenAI 的代码保持不变) ...
-
         try:
             response = client.chat.completions.create(
                 model=MODEL_NAME,
                 messages=[
                     {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": current_dialogue}
+                    {"role": "user", "content": current_dialogue[-500:]} # 限制一下长度
                 ],
                 temperature=0.7,
                 timeout=30
             )
             raw = response.choices[0].message.content
+            
+            # 处理 markdown 包裹问题
+            if raw.startswith("```json"): 
+                raw = raw[7:-3].strip()
+            elif raw.startswith("```"): 
+                raw = raw[3:-3].strip()
+                
             match = re.search(r'\{.*\}', raw, re.DOTALL)
             if match:
                 res = json.loads(match.group(0))
@@ -91,6 +98,17 @@ class SocialAgent:
                 for target, changes in impact.items():
                     self.memory.update_relationship(target, changes.get("affinity", 0), changes.get("trust", 0))
                 self.memory.save()
+                
+                # ====== 新增：动作发生后，写入长期记忆库 ======
+                self.memory.add_episodic_memory(
+                    env_state=env_state_text,
+                    action=res.get("action", ""),
+                    dialogue=res.get("dialogue", "")
+                )
+                
+                # 你可以在控制台打印一下心智理论的推理过程，非常有趣！
+                print(f"🧩 [{self.name} 的揣测]: {res.get('perception_of_others', '')}")
+                
                 return res
         except Exception as e:
             print(f"[{self.name}] 引擎出错: {e}")
