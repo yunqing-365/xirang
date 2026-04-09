@@ -1,0 +1,12 @@
+{
+    "relationships": {
+        "佛印": {
+            "affinity": 61,
+            "trust": 62
+        },
+        "王朝云": {
+            "affinity": 65,
+            "trust": 63
+        }
+    }
+}

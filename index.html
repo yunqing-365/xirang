@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <link rel="icon" href="data:;base64,=">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>息壤 | 生成式人文时空底座</title>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-paper: #FDF6E3;      /* 宣纸底色 */
+            --text-ink: #2C3E50;      /* 黛螺黑 */
+            --accent-red: #8B1D1D;    /* 沉稳的暗朱砂红 */
+            --border-gold: #D4C4A8;   /* 旧纸边缘色 */
+        }
+
+        body {
+            background-color: var(--bg-paper);
+            color: var(--text-ink);
+            font-family: 'Noto Serif SC', serif;
+            margin: 0;
+            padding: 0;
+            background-image: url('data:image/svg+xml;utf8,<svg width="100" height="100" xmlns="http://www.w3.org/2000/svg"><filter id="noise"><feTurbulence type="fractalNoise" baseFrequency="0.8" numOctaves="4" stitchTiles="stitch"/></filter><rect width="100" height="100" filter="url(%23noise)" opacity="0.05"/></svg>'); /* 纸张纹理质感 */
+        }
+
+        .header {
+            text-align: center;
+            padding: 40px 0 20px;
+            border-bottom: 2px solid var(--accent-red);
+            width: 80%;
+            margin: 0 auto 30px;
+        }
+
+        .header h1 {
+            font-size: 2.5em;
+            color: var(--accent-red);
+            margin: 0;
+            letter-spacing: 5px;
+            font-weight: 700;
+        }
+
+        .header p {
+            color: #7F8C8D;
+            letter-spacing: 2px;
+            font-size: 0.9em;
+        }
+
+        .container {
+            display: flex;
+            width: 90%;
+            max-width: 1400px;
+            margin: 0 auto;
+            gap: 40px;
+        }
+
+        /* 左侧：推演流 */
+        .deduction-stream {
+            flex: 2;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            padding-bottom: 100px;
+        }
+
+        /* 古籍册页风格的卡片 */
+        .chat-card {
+            background: #FFFFFF;
+            border: 1px solid var(--border-gold);
+            padding: 25px 30px;
+            position: relative;
+            box-shadow: 2px 4px 15px rgba(0,0,0,0.02);
+            opacity: 0;
+            transform: translateY(20px);
+            animation: fadeIn 0.8s forwards;
+        }
+
+        .chat-card::before {
+            content: "";
+            position: absolute;
+            top: 15px; bottom: 15px; left: 15px;
+            width: 2px;
+            background-color: var(--accent-red);
+            opacity: 0.6;
+        }
+
+        .agent-name {
+            font-size: 1.2em;
+            font-weight: 700;
+            color: var(--accent-red);
+            margin-bottom: 8px;
+            margin-left: 10px;
+        }
+
+        .agent-action {
+            font-size: 0.9em;
+            color: #888;
+            font-style: italic;
+            margin-bottom: 12px;
+            margin-left: 10px;
+        }
+
+        .agent-dialogue {
+            font-size: 1.05em;
+            line-height: 1.8;
+            margin-left: 10px;
+            text-align: justify;
+        }
+
+        .agent-contribution {
+            margin-top: 15px;
+            margin-left: 10px;
+            padding-top: 10px;
+            border-top: 1px dashed var(--border-gold);
+            color: #9A7B4F;
+            font-size: 0.9em;
+        }
+
+        /* 右侧：协同产出物 */
+        .artifacts-panel {
+            flex: 1;
+            position: sticky;
+            top: 20px;
+            height: fit-content;
+            background: #FAFAFA;
+            border: 2px double var(--accent-red);
+            padding: 30px;
+            box-shadow: 5px 5px 0px rgba(139, 29, 29, 0.1);
+        }
+
+        .artifacts-panel h3 {
+            text-align: center;
+            color: var(--accent-red);
+            border-bottom: 1px solid var(--border-gold);
+            padding-bottom: 15px;
+            margin-top: 0;
+        }
+
+        .workspace-content {
+            line-height: 2;
+            color: var(--text-ink);
+            white-space: pre-wrap;
+            font-size: 1.1em;
+        }
+
+        /* 底部控制台 */
+        .controls {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            background: rgba(253, 246, 227, 0.95);
+            border-top: 1px solid var(--border-gold);
+            padding: 20px 0;
+            text-align: center;
+            backdrop-filter: blur(5px);
+        }
+
+        button {
+            background-color: var(--accent-red);
+            color: #FDF6E3;
+            border: none;
+            padding: 12px 40px;
+            font-size: 1.1em;
+            font-family: 'Noto Serif SC', serif;
+            cursor: pointer;
+            transition: all 0.3s;
+            letter-spacing: 2px;
+        }
+
+        button:hover {
+            background-color: #6A1515;
+            box-shadow: 0 4px 10px rgba(139,29,29,0.3);
+        }
+
+        button:disabled {
+            background-color: #999;
+            cursor: not-allowed;
+            box-shadow: none;
+        }
+
+        @keyframes fadeIn {
+            to { opacity: 1; transform: translateY(0); }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="header">
+        <h1>息 壤</h1>
+        <p>生成式人文时空计算底座</p>
+    </div>
+
+    <div class="container">
+        <div class="deduction-stream" id="chat-stream">
+            <div class="chat-card">
+                <div class="agent-name">【时空背景】</div>
+                <div class="agent-dialogue">元丰三年冬至夜。黄州临皋亭。窗外大雪纷飞，江风呼啸。室内炭火正旺，红泥小火炉上炖着猪肉。<br>（佛印铺开宣纸，苏轼端起酒杯，王朝云在一旁研墨。三人准备协同创作一幅《临皋雪夜图》）</div>
+            </div>
+        </div>
+
+        <div class="artifacts-panel">
+            <h3>临皋雪夜图 (协同资产)</h3>
+            <div class="workspace-content" id="workspace">（画纸空白，笔墨已具。等待落笔...）</div>
+        </div>
+    </div>
+
+    <div class="controls">
+        <button id="nextBtn" onclick="nextRound()">推进时空演化 (Advance)</button>
+    </div>
+
+    <script>
+        async function nextRound() {
+            const btn = document.getElementById('nextBtn');
+            btn.disabled = true;
+            btn.innerText = "智能体博弈与演算中...";
+
+            try {
+                // 向我们的 Python 后端发送请求
+                const response = await fetch('/api/next', { method: 'POST' });
+                const data = await response.json();
+
+                if(data.status === "success") {
+                    data.results.forEach((res, index) => {
+                        setTimeout(() => {
+                            appendChatCard(res.name, res.action, res.dialogue, res.contribution);
+                            updateWorkspace(res.workspace);
+                        }, index * 1000); // 错开显示时间，增加呼吸感
+                    });
+                }
+            } catch (error) {
+                alert("后端连接失败，请确保 Python 服务已启动！");
+            } finally {
+                setTimeout(() => {
+                    btn.disabled = false;
+                    btn.innerText = "推进时空演化 (Advance)";
+                    window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
+                }, data.results ? data.results.length * 1000 : 0);
+            }
+        }
+
+        function appendChatCard(name, action, dialogue, contribution) {
+            const stream = document.getElementById('chat-stream');
+            let contributionHtml = contribution && contribution !== "无" 
+                ? `<div class="agent-contribution">[任务补充]：${contribution}</div>` : '';
+
+            const cardHtml = `
+                <div class="chat-card">
+                    <div class="agent-name">【${name}】</div>
+                    <div class="agent-action">动作：${action}</div>
+                    <div class="agent-dialogue">${dialogue}</div>
+                    ${contributionHtml}
+                </div>
+            `;
+            stream.insertAdjacentHTML('beforeend', cardHtml);
+        }
+
+        function updateWorkspace(content) {
+            document.getElementById('workspace').innerHTML = content.replace(/\n/g, '<br>');
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,12 @@
+{
+    "relationships": {
+        "苏轼": {
+            "affinity": 59,
+            "trust": 55
+        },
+        "佛印": {
+            "affinity": 57,
+            "trust": 55
+        }
+    }
+}
