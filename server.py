@@ -15,6 +15,7 @@ from contextlib import asynccontextmanager
 
 import uvicorn
 from fastapi import FastAPI, HTTPException, Query
+from openai import AsyncOpenAI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
@@ -425,6 +426,40 @@ async def get_profile(user_id: str):
             for r in p.reflections[-3:]
         ],
     }
+
+
+
+# ── 情境知识气泡 API ─────────────────────────────────────────
+class ExplainRequest(BaseModel):
+    term: str           # 需要解释的历史名词
+    context: str = ""  # 当前对话场景（可选，提升解释相关性）
+
+_explain_client = AsyncOpenAI(api_key=_settings.API_KEY, base_url=_settings.BASE_URL)
+
+@app.post("/api/explain")
+async def explain_term(req: ExplainRequest):
+    """为历史名词生成简短的情境知识气泡解释"""
+    term = req.term.strip()[:30]
+    if not term:
+        raise HTTPException(status_code=400, detail="term 不能为空")
+
+    prompt = (
+        f"你是一位古典文化顾问。请用50字以内，简洁解释历史名词「{term}」。"
+        f"{'当前场景：' + req.context[:200] if req.context else ''}"
+        "要求：语言文雅，通俗易懂，如有朝代/人物/制度背景请提及。只输出解释，不要加引号或前缀。"
+    )
+    try:
+        resp = await _explain_client.chat.completions.create(
+            model=_settings.MODEL_NAME,
+            messages=[{"role": "user", "content": prompt}],
+            max_tokens=120,
+            temperature=0.3,
+            timeout=8,
+        )
+        explanation = resp.choices[0].message.content.strip()
+        return {"term": term, "explanation": explanation}
+    except Exception as e:
+        return {"term": term, "explanation": f"（暂无解释：{str(e)[:40]}）"}
 
 
 if __name__ == "__main__":
