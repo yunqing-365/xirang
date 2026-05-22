@@ -1,11 +1,27 @@
-# agent.py
+# agent.py  ── 硬核升级版
+"""
+本轮升级：
+  1. 挂载 PersonaEngine：人格指纹初始化 + 每轮一致性检查
+  2. 接入 EventBus：Agent 行为通过事件广播，解耦下游消费
+  3. 记忆写入改用 add_episodic_memory_async（避免 to_thread 嵌套）
+  4. 情绪传递给记忆检索（情绪相似性加权）
+  5. 支持人格违规时触发 PERSONA_VIOLATION 事件
+"""
+import asyncio
 import json
 import re
-from openai import OpenAI
-from config import API_KEY, BASE_URL, MODEL_NAME
-from memory import SocialMemory
 
-client = OpenAI(api_key=API_KEY, base_url=BASE_URL)
+from openai import AsyncOpenAI
+
+from config import get_settings
+from memory import SocialMemory
+from persona_engine import PersonaEngine
+from event_bus import bus, Event, EventType
+from prompt_templates import AGENT_SYSTEM
+
+_settings = get_settings()
+_client = AsyncOpenAI(api_key=_settings.API_KEY, base_url=_settings.BASE_URL)
+
 
 class SocialAgent:
     def __init__(self, name, identity, personality, initial_metrics, task_role):
@@ -14,118 +30,191 @@ class SocialAgent:
         self.personality = personality
         self.metrics = initial_metrics
         self.task_role = task_role
+        self.era = ""  # 由 ScenarioManager 注入
+
         self.memory = SocialMemory(name)
-        self.rag_engine = None 
+        self.persona = PersonaEngine(name)
+        self.rag_engine = None
 
     def mount_knowledge(self, rag_engine):
         self.rag_engine = rag_engine
 
-    def generate_response_stream(self, scene_desc, current_task, shared_workspace, current_dialogue, env_state_text):
-        """核心升级：Token 级流式生成与后台状态同步"""
-        relationships_str = json.dumps(self.memory.data["relationships"], ensure_ascii=False)
-        
-        # 1. 检索全局知识 (RAG)
-        search_query = f"{current_task} {current_dialogue}"
-        reference_knowledge = "无"
-        if self.rag_engine:
-            # 传入当前剧本年份(如有)，这里预留了接口，你可以按需传入 current_year=xxx
-            reference_knowledge = self.rag_engine.retrieve(search_query)
-            
-        # 2. 唤醒个人专属情境与长效记忆 (Vector Memory)
-        past_memories = self.memory.retrieve_episodic_memory(current_dialogue)
+    def set_era(self, era: str):
+        self.era = era
 
-        system_prompt = f"""
-你是【{self.name}】。
-身份：{self.identity}
-性格：{self.personality}
-精神状态：{json.dumps(self.metrics, ensure_ascii=False)}
+    async def initialize(self):
+        """
+        首次使用前调用：生成人格指纹（已有缓存则直接加载）。
+        由 ScenarioManager.load_era 在 agents 创建后 gather 调用。
+        """
+        await self.persona.ensure_fingerprint(
+            self.identity, self.personality, self.era
+        )
 
-【社会关系记忆】: {relationships_str}
-【当前场景】: {scene_desc}
+    # ── 核心生成流 ────────────────────────────────────────────
 
-=== 动态物理环境 ===
-{env_state_text}
+    async def generate_response_stream(
+        self,
+        scene_desc: str,
+        current_task: str,
+        shared_workspace: str,
+        current_dialogue: str,
+        env_state_text: str,
+        session_id: str = "",
+        user_context: str = "",
+        current_emotion: str = "",    # 上一回合的世界情绪（用于记忆检索加权）
+    ):
+        """
+        Async generator，逐 token yield 给 server.py 的 SSE 流。
+        """
+        relationships_str = json.dumps(
+            self.memory.data["relationships"], ensure_ascii=False
+        )
 
-=== 专属时空知识检索结果 ===
-（以下是系统为你检索到的相关记忆或知识。💡提示：如果其中包含类似【视觉文献来源：xxx.jpg】的标记，说明这是你可以直接向大家展示的画作或实物！）
-{reference_knowledge}
+        # ── 并发：RAG检索 + 记忆检索 ─────────────────────────
+        async def _rag():
+            if not self.rag_engine:
+                return "无"
+            return await self.rag_engine.aretrieve(
+                f"{current_task} {current_dialogue[-300:]}"
+            )
 
-=== 【你的往昔记忆涌上心头】 ===
-以下是你过去经历过的相关情境，可作为你当前对话的情感和事实参考：
-{past_memories}
+        def _mem():
+            return self.memory.retrieve_episodic_memory(
+                current_dialogue[-300:],
+                current_emotion=current_emotion,
+            )
 
-=== 协同任务系统 ===
-【团队共同任务】: {current_task}
-【你在团队中的职责】: {self.task_role}
-【当前的团队协作产出物】: {shared_workspace}
+        reference_knowledge, past_memories = await asyncio.gather(
+            _rag(),
+            asyncio.to_thread(_mem),
+        )
 
-必须以纯 JSON 格式输出：
-{{
-    "perception_of_others": "【心智理论】推测当前环境中其他人的心理状态、情绪或潜在意图",
-    "thought": "结合他人意图、你的往昔记忆以及感官环境，进行下一步的行动分析",
-    "target": "你话语的对象",
-    "action": "动作描写",
-    "dialogue": "台词（可以适当感叹或呼应记忆中的往事）",
-    "contribution": "对协作产出的实质性补充（无则填无）",
-    "show_image": "如果你想展示知识库中提到的视觉文献，请提取其文件名（如 xxx.jpg），如果没有则填 无",
-    "env_impact": {{"环境参数名": "改变后的状态"}},
-    "social_impact": {{"对象名": {{"affinity": 变化值, "trust": 变化值}}}}
-}}
-"""
+        # ── 注入人格约束到 System Prompt ─────────────────────
+        persona_constraint = self.persona.get_fingerprint_for_prompt()
+        system_prompt = AGENT_SYSTEM.substitute(
+            name=self.name,
+            identity=self.identity,
+            personality=self.personality,
+            metrics_json=json.dumps(self.metrics, ensure_ascii=False),
+            relationships_json=relationships_str,
+            scene_desc=scene_desc,
+            env_state_text=env_state_text,
+            reference_knowledge=reference_knowledge,
+            past_memories=past_memories,
+            current_task=current_task,
+            task_role=self.task_role,
+            shared_workspace=shared_workspace,
+        )
+        if user_context:
+            system_prompt += f"\n\n=== 【与你对话的高维观察者背景】 ===\n{user_context}"
+        if persona_constraint:
+            system_prompt += f"\n\n=== 【你的人格约束（必须严格遵守）】 ===\n{persona_constraint}"
+
+        # ── EventBus：通知"开始思考" ─────────────────────────
+        await bus.emit(Event(
+            type=EventType.AGENT_THINKING,
+            session_id=session_id,
+            payload={"name": self.name},
+        ))
 
         try:
-            response = client.chat.completions.create(
-                model=MODEL_NAME,
+            response = await _client.chat.completions.create(
+                model=_settings.MODEL_NAME,
                 messages=[
                     {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": current_dialogue[-500:]} 
+                    {"role": "user",   "content": current_dialogue[-500:]},
                 ],
                 temperature=0.7,
-                stream=True,  # ⚡ 开启大模型流式输出
-                timeout=30
+                stream=True,
+                timeout=30,
             )
-            
+
             raw_full_text = ""
-            
-            # ⚡ 实时抛出 Token 给前端
-            for chunk in response:
+            async for chunk in response:
                 if chunk.choices[0].delta.content:
                     token = chunk.choices[0].delta.content
                     raw_full_text += token
-                    # 将 Token 吐给外层（server.py）
                     yield {"type": "token", "content": token}
-            
-            # --- 文本流传输完毕后，在后台进行数据解析与记忆落盘 ---
-            raw = raw_full_text.strip()
-            if raw.startswith("```json"): 
-                raw = raw[7:-3].strip()
-            elif raw.startswith("```"): 
-                raw = raw[3:-3].strip()
-                
+
+            # ── 流结束：解析 + 人格一致性检查 ─────────────────
+            raw = _strip_json(raw_full_text.strip())
             match = re.search(r'\{.*\}', raw, re.DOTALL)
-            if match:
-                res = json.loads(match.group(0))
-                
-                # 持久化社会关系更新
-                impact = res.get("social_impact", {})
-                for target, changes in impact.items():
-                    self.memory.update_relationship(target, changes.get("affinity", 0), changes.get("trust", 0))
-                self.memory.save()
-                
-                # 写入长期记忆库 (触发折叠衰退机制)
-                self.memory.add_episodic_memory(
-                    env_state=env_state_text,
-                    action=res.get("action", ""),
-                    dialogue=res.get("dialogue", "")
+            if not match:
+                yield {"type": "error", "content": "JSON 解析失败"}
+                return
+
+            res = json.loads(match.group(0))
+            action   = res.get("action",   "静坐")
+            dialogue = res.get("dialogue", "…")
+            emotion  = res.get("emotion_keyword", "平静")
+
+            # ── 人格一致性检查（并发，不阻塞主流）────────────
+            consistency = await self.persona.check_consistency(action, dialogue)
+            if consistency.has_violation:
+                await bus.emit(Event(
+                    type=EventType.PERSONA_VIOLATION,
+                    session_id=session_id,
+                    priority=2,
+                    payload={
+                        "name": self.name,
+                        "score": consistency.consistency_score,
+                        "violations": consistency.violations,
+                        "fix": consistency.suggested_fix,
+                    },
+                ))
+                print(f"🚨 [{self.name}] 人格违规 score={consistency.consistency_score} "
+                      f"| {consistency.violations}")
+
+            # ── 时代语言美化（高一致性时可选）────────────────
+            if consistency.consistency_score < 70 and consistency.suggested_fix != "无":
+                print(f"  ✏️  [{self.name}] 时代语言微调中…")
+                dialogue = await self.persona.stylize_dialogue(dialogue, self.era)
+                res["dialogue"] = dialogue
+
+            # ── 社会关系 + 记忆落盘（并发）──────────────────
+            for target, changes in res.get("social_impact", {}).items():
+                self.memory.update_relationship(
+                    target,
+                    changes.get("affinity", 0),
+                    changes.get("trust", 0),
                 )
-                
-                print(f"🧩 [{self.name} 的心智推演已完成落盘]")
-                
-                # 抛出最终解析好的完整 JSON 对象，供前端更新 UI 卡片
-                yield {"type": "done", "parsed_data": res}
-            else:
-                yield {"type": "error", "content": "JSON 结构解析失败"}
-                
+            self.memory.save()
+            self.memory.current_round += 1
+
+            # 记忆写入（用新的异步版，不需要 to_thread）
+            asyncio.create_task(
+                self.memory.add_episodic_memory_async(
+                    env_state_text, action, dialogue
+                )
+            )
+
+            # ── EventBus：广播完整行动 ────────────────────────
+            await bus.emit(Event(
+                type=EventType.AGENT_SPOKE,
+                session_id=session_id,
+                payload={
+                    "name": self.name,
+                    "action": action,
+                    "dialogue": dialogue,
+                    "emotion": emotion,
+                    "contribution": res.get("contribution", "无"),
+                    "show_image": res.get("show_image", "无"),
+                    "env_impact": res.get("env_impact"),
+                    "social_impact": res.get("social_impact", {}),
+                    "consistency_score": consistency.consistency_score,
+                },
+            ))
+
+            yield {"type": "done", "parsed_data": res}
+
         except Exception as e:
             print(f"[{self.name}] 引擎出错: {e}")
             yield {"type": "error", "content": str(e)}
+
+
+def _strip_json(text: str) -> str:
+    if text.startswith("```json"): text = text[7:]
+    elif text.startswith("```"):   text = text[3:]
+    if text.endswith("```"):       text = text[:-3]
+    return text.strip()
