@@ -429,6 +429,121 @@ async def get_profile(user_id: str):
 
 
 
+# ── 知识图谱 API ─────────────────────────────────────────────
+@app.get("/api/graph/{session_id}")
+async def get_knowledge_graph(session_id: str):
+    """
+    返回当前 session 的人物关系图谱数据。
+    节点 = agents，边 = 双向关系（affinity / trust）。
+    """
+    data = await _get_session(session_id)
+    agents = data.get("agents", [])
+    manager = data.get("manager")
+
+    nodes = []
+    edges = []
+    seen_edges: set = set()
+
+    for agent in agents:
+        nodes.append({
+            "id": agent.name,
+            "label": agent.name,
+            "identity": agent.identity,
+            "era": getattr(agent, "era", ""),
+            "task_role": agent.task_role,
+        })
+
+    for agent in agents:
+        rels = agent.memory.data.get("relationships", {})
+        for target_name, scores in rels.items():
+            key = tuple(sorted([agent.name, target_name]))
+            if key in seen_edges:
+                continue
+            seen_edges.add(key)
+            edges.append({
+                "source": agent.name,
+                "target": target_name,
+                "affinity": scores.get("affinity", 50),
+                "trust": scores.get("trust", 50),
+            })
+
+    # 加入用户探索档案里的历史人物节点（如果不在 agents 中）
+    milestones = []
+    ns = data.get("narrative_state")
+    if ns:
+        milestones = ns.milestones[-10:]
+
+    return {
+        "nodes": nodes,
+        "edges": edges,
+        "milestones": milestones,
+        "phase": data.get("narrative_state").phase.value if data.get("narrative_state") else "OPENING",
+    }
+
+
+# ── 会话后小测验 API ─────────────────────────────────────────
+class QuizRequest(BaseModel):
+    session_id: str
+    user_id: str = "anonymous"
+
+_quiz_client = AsyncOpenAI(api_key=_settings.API_KEY, base_url=_settings.BASE_URL)
+
+@app.post("/api/quiz")
+async def generate_quiz(req: QuizRequest):
+    """
+    根据本次会话的对话历史与里程碑，用 LLM 生成 3 道选择题进行记忆强化。
+    """
+    data = await _get_session(req.session_id)
+    manager = data.get("manager")
+    ns = data.get("narrative_state")
+
+    dialogue_excerpt = (manager.current_dialogue or "")[-800:]
+    milestones_text  = "; ".join(ns.milestones[-8:]) if ns else ""
+    workspace_text   = (manager.shared_workspace or "")[-400:]
+
+    prompt = f"""你是一位博学的历史教育者。根据以下时空情境，出 3 道单选题，测试玩家对本次历史体验的记忆与理解。
+
+【本次对话摘要】
+{dialogue_excerpt}
+
+【重要叙事事件】
+{milestones_text or "无"}
+
+【时空产物】
+{workspace_text or "无"}
+
+要求：
+- 每题紧扣本次剧情或历史背景，不出泛泛常识题
+- 每题 4 个选项（A/B/C/D），只有 1 个正确答案
+- 正确答案后给出 1-2 句简短解析
+- 输出严格 JSON，格式如下，不要加任何其他文字：
+[
+  {{
+    "q": "题目文字",
+    "options": {{"A":"...","B":"...","C":"...","D":"..."}},
+    "answer": "A",
+    "explanation": "解析文字"
+  }},
+  ...
+]"""
+
+    try:
+        resp = await _quiz_client.chat.completions.create(
+            model=_settings.MODEL_NAME,
+            messages=[{"role": "user", "content": prompt}],
+            max_tokens=800,
+            temperature=0.5,
+            timeout=20,
+        )
+        raw = resp.choices[0].message.content.strip()
+        # 去掉可能的 markdown fence
+        raw = raw.replace("```json", "").replace("```", "").strip()
+        questions = json.loads(raw)
+        return {"status": "success", "questions": questions[:3]}
+    except Exception as e:
+        return {"status": "error", "message": str(e), "questions": []}
+
+
 # ── 情境知识气泡 API ─────────────────────────────────────────
 class ExplainRequest(BaseModel):
     term: str           # 需要解释的历史名词
@@ -460,6 +575,261 @@ async def explain_term(req: ExplainRequest):
         return {"term": term, "explanation": explanation}
     except Exception as e:
         return {"term": term, "explanation": f"（暂无解释：{str(e)[:40]}）"}
+
+
+
+# ── Phase 6: 探索连续打卡 ─────────────────────────────────
+class CheckinRequest(BaseModel):
+    user_id: str = "anonymous"
+
+@app.post("/api/checkin")
+async def checkin(req: CheckinRequest):
+    """每日打卡：更新 streak，返回成就解锁信息"""
+    profile = await asyncio.to_thread(profile_store.load, req.user_id)
+    result = profile.checkin_today()
+    await asyncio.to_thread(profile_store.save, profile)
+    return {
+        "streak": result["streak"],
+        "streak_best": profile.streak_best,
+        "is_new_day": result["is_new_day"],
+        "newly_unlocked_badges": result["newly_unlocked_badges"],
+        "all_badges": profile.badges,
+        "title": profile.exploration_depth,
+    }
+
+@app.get("/api/checkin/{user_id}")
+async def get_checkin_status(user_id: str):
+    """获取当前打卡状态（不写入）"""
+    import datetime
+    profile = await asyncio.to_thread(profile_store.load, user_id)
+    today = datetime.date.today().isoformat()
+    return {
+        "streak": profile.streak_days,
+        "streak_best": profile.streak_best,
+        "checked_in_today": profile.last_checkin_date == today,
+        "all_badges": profile.badges,
+        "title": profile.exploration_depth,
+    }
+
+
+# ── Phase 6: 每日时空速递 ─────────────────────────────────
+class DigestRequest(BaseModel):
+    user_id: str = "anonymous"
+
+_digest_client = AsyncOpenAI(api_key=_settings.API_KEY, base_url=_settings.BASE_URL)
+
+@app.post("/api/daily_digest")
+async def generate_daily_digest(req: DigestRequest):
+    """
+    根据用户的探索档案，LLM 生成一段 2 分钟可读的每日历史情境速递。
+    包含：一则今日史事、一个古今镜像类比、一句人文金句。
+    """
+    import datetime
+    profile = await asyncio.to_thread(profile_store.load, req.user_id)
+    today = datetime.date.today().isoformat()
+
+    eras_text  = "、".join(profile.explored_eras[-4:]) or "中国历史"
+    themes_text = "、".join(list(profile.preferred_genres.keys())[:3]) or "人文历史"
+    figures_text = "、".join(profile.explored_figures[-4:]) or "古代人物"
+
+    prompt = f"""你是「息壤」人文时空底座的每日速递主编。根据用户的探索偏好，生成一篇约 200 字的今日历史速递。
+
+用户偏好：
+- 已探索朝代：{eras_text}
+- 感兴趣主题：{themes_text}
+- 结识人物：{figures_text}
+- 今日日期：{today}
+
+要求输出严格 JSON（不加任何其他文字）：
+{{
+  "title": "速递标题（10字内，引人入胜）",
+  "today_event": "今日史事（60字内，选与用户偏好朝代/主题相关的真实历史事件或节气文化）",
+  "mirror": "古今镜像（50字内，将今日史事与当代生活做一类比，启发思考）",
+  "quote": "人文金句（来自该朝代文人或史书，20字内，附出处）",
+  "quote_source": "出处（书名或人名）",
+  "invitation": "邀请语（30字内，邀请用户今日探索某个相关场景）"
+}}"""
+
+    try:
+        resp = await _digest_client.chat.completions.create(
+            model=_settings.MODEL_NAME,
+            messages=[{"role": "user", "content": prompt}],
+            max_tokens=500,
+            temperature=0.7,
+            timeout=20,
+        )
+        raw = resp.choices[0].message.content.strip().replace("```json","").replace("```","").strip()
+        digest = json.loads(raw)
+        # 记录生成日期
+        profile.daily_digest_last = today
+        await asyncio.to_thread(profile_store.save, profile)
+        return {"status": "success", "date": today, "digest": digest}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+
+# ── Phase 6: 金句分享卡数据 ──────────────────────────────
+class ShareCardRequest(BaseModel):
+    session_id: str
+    quote: str          # 要分享的对话金句
+    speaker: str = ""   # 说话人
+    era: str = ""       # 朝代/时代
+
+@app.post("/api/share_card")
+async def generate_share_card(req: ShareCardRequest):
+    """
+    返回分享卡所需的结构化数据，供前端 Canvas 渲染成精美图片。
+    额外用 LLM 生成一句当代导读，让金句更有传播价值。
+    """
+    _sc_client = AsyncOpenAI(api_key=_settings.API_KEY, base_url=_settings.BASE_URL)
+    prompt = (
+        f"以下是历史情境中「{req.speaker or '古人'}」的一句话：\n「{req.quote}」\n"
+        f"朝代：{req.era or '不详'}\n"
+        "请用20字以内写一句当代导读，让现代读者感同身受。只输出导读，不加引号或其他文字。"
+    )
+    try:
+        resp = await _sc_client.chat.completions.create(
+            model=_settings.MODEL_NAME,
+            messages=[{"role": "user", "content": prompt}],
+            max_tokens=60, temperature=0.6, timeout=10,
+        )
+        modern_note = resp.choices[0].message.content.strip()
+    except Exception:
+        modern_note = "历史深处的回响，穿越千年而来"
+
+    return {
+        "quote": req.quote,
+        "speaker": req.speaker or "历史人物",
+        "era": req.era or "",
+        "modern_note": modern_note,
+        "watermark": "息壤 · 人文时空",
+    }
+
+
+# ── Phase 7: 历史人物 TTS 语音 ───────────────────────────────
+import io
+import os
+
+# 音色映射：不同角色类型 → OpenAI TTS voice
+_VOICE_MAP = {
+    "默认":   "onyx",    # 沉稳男声
+    "文人":   "fable",   # 儒雅叙事
+    "女性":   "nova",    # 温婉女声
+    "少年":   "shimmer", # 清亮年轻
+    "权贵":   "echo",    # 威严男声
+    "市井":   "alloy",   # 亲切平民
+}
+
+# 时代语调前缀（注入到 TTS 文本前，引导语气）
+_ERA_TONE_PREFIX = {
+    "唐朝": "（以盛唐豪放之气朗声道）",
+    "宋朝": "（以宋人温雅之风徐徐说道）",
+    "北宋": "（以宋人温雅之风徐徐说道）",
+    "明朝": "（以明代文士从容口吻说道）",
+    "清朝": "（以清人严谨之态缓缓言道）",
+    "先秦": "（以古雅庄重之声说道）",
+}
+
+class TTSRequest(BaseModel):
+    text: str
+    speaker: str = ""
+    era: str = ""
+    voice_type: str = "默认"   # 默认/文人/女性/少年/权贵/市井
+
+_tts_client = AsyncOpenAI(api_key=_settings.API_KEY, base_url=_settings.BASE_URL)
+
+@app.post("/api/tts")
+async def text_to_speech(req: TTSRequest):
+    """
+    将对话文本转为历史人物语音。
+    返回 audio/mpeg 音频流。
+    """
+    text = req.text.strip()[:300]
+    if not text:
+        raise HTTPException(status_code=400, detail="text 不能为空")
+
+    voice = _VOICE_MAP.get(req.voice_type, "onyx")
+    tone_prefix = _ERA_TONE_PREFIX.get(req.era, "")
+    tts_text = tone_prefix + text if tone_prefix else text
+
+    try:
+        response = await _tts_client.audio.speech.create(
+            model="tts-1",
+            voice=voice,
+            input=tts_text,
+            speed=0.9,          # 略慢，增添古韵感
+        )
+        audio_bytes = response.content
+        return StreamingResponse(
+            io.BytesIO(audio_bytes),
+            media_type="audio/mpeg",
+            headers={"Content-Disposition": "inline; filename=speech.mp3"}
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"TTS 生成失败：{str(e)[:100]}")
+
+
+# ── Phase 7: 场景图像生成 ─────────────────────────────────────
+class SceneImageRequest(BaseModel):
+    session_id: str
+    scene_hint: str = ""   # 可选：当前场景关键词
+
+_img_client = AsyncOpenAI(api_key=_settings.API_KEY, base_url=_settings.BASE_URL)
+
+# 水墨风格提示词模板
+_INK_STYLE = (
+    "traditional Chinese ink wash painting style, "
+    "Song dynasty aesthetics, monochromatic with subtle warm tones, "
+    "loose brushwork, atmospheric perspective, "
+    "scholarly and poetic mood, no text, no watermark"
+)
+
+@app.post("/api/scene_image")
+async def generate_scene_image(req: SceneImageRequest):
+    """
+    根据当前场景描述生成水墨风场景图。
+    返回图像 URL 或 base64（取决于接口支持）。
+    """
+    data = await _get_session(req.session_id)
+    manager = data.get("manager")
+
+    # 构建场景描述
+    scene_raw = getattr(manager, "current_dialogue", "") or ""
+    scene_excerpt = scene_raw[-300:] if scene_raw else req.scene_hint or "古代中国文人茶室"
+
+    # 先用 LLM 将对话场景提炼成图像提示词（英文）
+    _prompt_client = AsyncOpenAI(api_key=_settings.API_KEY, base_url=_settings.BASE_URL)
+    try:
+        prompt_resp = await _prompt_client.chat.completions.create(
+            model=_settings.MODEL_NAME,
+            messages=[{
+                "role": "user",
+                "content": (
+                    f"将以下中文历史场景描述提炼成 20 个英文关键词，用于文生图提示词。"
+                    f"只输出英文关键词，逗号分隔，不加其他文字：\n{scene_excerpt}"
+                )
+            }],
+            max_tokens=80, temperature=0.3, timeout=8,
+        )
+        scene_keywords = prompt_resp.choices[0].message.content.strip()
+    except Exception:
+        scene_keywords = req.scene_hint or "ancient Chinese scholar room, candlelight"
+
+    full_prompt = f"{scene_keywords}, {_INK_STYLE}"
+
+    try:
+        img_resp = await _img_client.images.generate(
+            model="dall-e-3",
+            prompt=full_prompt,
+            size="1024x576",
+            quality="standard",
+            n=1,
+        )
+        image_url = img_resp.data[0].url
+        return {"status": "success", "url": image_url, "prompt": full_prompt}
+    except Exception as e:
+        # 如果 DALL-E 不可用，返回错误信息供前端优雅降级
+        return {"status": "error", "message": str(e)[:120], "url": None}
 
 
 if __name__ == "__main__":

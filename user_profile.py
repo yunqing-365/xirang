@@ -65,6 +65,13 @@ class UserProfile:
     total_rounds: int = 0
     total_sessions: int = 0
 
+    # ── 连续打卡 & 成就 ───────────────────────────────────────
+    streak_days: int = 0                          # 当前连续探索天数
+    streak_best: int = 0                          # 历史最长连续天数
+    last_checkin_date: str = ""                   # "YYYY-MM-DD" 格式
+    badges: List[str] = field(default_factory=list)  # 已解锁成就列表
+    daily_digest_last: str = ""                   # 上次生成每日速递的日期
+
     # ── 统计 ──────────────────────────────────────────────────
     @property
     def exploration_depth(self) -> str:
@@ -80,6 +87,49 @@ class UserProfile:
             return "通古博今"
         else:
             return "时空织梦者"
+
+    def checkin_today(self) -> dict:
+        """
+        处理每日打卡逻辑。
+        返回 {streak, is_new_day, newly_unlocked_badges}
+        """
+        import datetime
+        today = datetime.date.today().isoformat()
+        newly_unlocked: List[str] = []
+
+        if self.last_checkin_date == today:
+            return {"streak": self.streak_days, "is_new_day": False, "newly_unlocked_badges": []}
+
+        yesterday = (datetime.date.today() - datetime.timedelta(days=1)).isoformat()
+        if self.last_checkin_date == yesterday:
+            self.streak_days += 1
+        else:
+            self.streak_days = 1  # 断签重置
+
+        self.streak_best = max(self.streak_best, self.streak_days)
+        self.last_checkin_date = today
+        self.last_active = time.time()
+
+        # 成就解锁
+        streak_badges = {3: "三日不辍", 7: "七日探史", 14: "两周博览", 30: "月旦史海"}
+        for days, badge in streak_badges.items():
+            if self.streak_days >= days and badge not in self.badges:
+                self.badges.append(badge)
+                newly_unlocked.append(badge)
+
+        era_badges = {3: "踏遍三朝", 6: "六朝通览", 10: "十代长河"}
+        for eras, badge in era_badges.items():
+            if len(set(self.explored_eras)) >= eras and badge not in self.badges:
+                self.badges.append(badge)
+                newly_unlocked.append(badge)
+
+        reflection_badges = {5: "五省吾身", 20: "廿思达观"}
+        for count, badge in reflection_badges.items():
+            if len(self.reflections) >= count and badge not in self.badges:
+                self.badges.append(badge)
+                newly_unlocked.append(badge)
+
+        return {"streak": self.streak_days, "is_new_day": True, "newly_unlocked_badges": newly_unlocked}
 
     def record_exploration(self, record: ExplorationRecord):
         self.explorations.append(record)

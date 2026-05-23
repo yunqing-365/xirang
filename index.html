@@ -292,6 +292,304 @@
         @keyframes pulse { 0%{opacity:0.5;} 50%{opacity:1;} 100%{opacity:0.5;} }
         @keyframes blink { 50%{opacity:0;} }
         .hidden { display:none !important; }
+    
+        /* ══ 知识图谱 Modal ══════════════════════════════════ */
+        #graph-overlay, #quiz-overlay {
+            position:fixed; inset:0; z-index:600;
+            display:flex; align-items:center; justify-content:center;
+            background:rgba(10,6,2,0.70); backdrop-filter:blur(4px);
+            opacity:0; pointer-events:none; transition:opacity 0.35s ease;
+        }
+        #graph-overlay.open, #quiz-overlay.open { opacity:1; pointer-events:all; }
+
+        .modal-card {
+            background:linear-gradient(160deg,#fdf8ef,#f3e8d0);
+            border:1px solid #c8a84a; border-radius:8px;
+            box-shadow:0 24px 80px rgba(0,0,0,0.3);
+            transform:translateY(24px) scale(0.97);
+            transition:transform 0.4s cubic-bezier(0.34,1.46,0.64,1);
+            overflow:hidden;
+        }
+        #graph-overlay.open .modal-card,
+        #quiz-overlay.open .modal-card { transform:translateY(0) scale(1); }
+
+        .modal-header {
+            padding:18px 28px 14px;
+            border-bottom:1px solid rgba(200,168,74,0.35);
+            display:flex; align-items:center; justify-content:space-between;
+        }
+        .modal-title { font-size:1.0em; letter-spacing:3px; color:#6a4000; font-weight:600; }
+        .modal-close {
+            background:transparent; border:none; cursor:pointer;
+            font-size:1.3em; color:#a07830; line-height:1;
+            padding:0 4px; transition:color 0.2s;
+        }
+        .modal-close:hover { color:#6a4000; }
+
+        /* 图谱 */
+        #graph-modal { width:min(90vw,860px); height:min(80vh,620px); }
+        #graph-svg-wrap {
+            width:100%; height:calc(100% - 60px);
+            overflow:hidden; position:relative;
+        }
+        #graph-svg { width:100%; height:100%; cursor:grab; }
+        #graph-svg:active { cursor:grabbing; }
+        #graph-legend {
+            position:absolute; bottom:10px; left:14px;
+            font-size:0.72em; color:#8a6030; line-height:1.8;
+            background:rgba(253,246,227,0.85); padding:6px 10px; border-radius:4px;
+        }
+        #graph-tooltip {
+            position:fixed; z-index:700;
+            background:#fffbf0; border:1px solid #c8a84a;
+            border-radius:5px; padding:8px 12px;
+            font-size:0.8em; color:#4a3010; line-height:1.6;
+            max-width:220px; pointer-events:none; opacity:0; transition:opacity 0.15s;
+            box-shadow:0 4px 16px rgba(0,0,0,0.1);
+        }
+        #graph-tooltip.visible { opacity:1; }
+
+        /* 小测验 */
+        #quiz-modal { width:min(90vw,580px); max-height:min(88vh,720px); overflow-y:auto; }
+        .quiz-body { padding:24px 30px 30px; }
+        .quiz-loading { text-align:center; padding:40px; color:#a07830; font-style:italic; }
+        .quiz-q { margin-bottom:28px; }
+        .quiz-q-num { font-size:0.75em; letter-spacing:2px; color:#a07830; margin-bottom:6px; }
+        .quiz-q-text { font-size:1.02em; line-height:1.75; color:#2c1800; margin-bottom:12px; }
+        .quiz-option {
+            display:flex; align-items:flex-start; gap:10px;
+            padding:9px 14px; margin-bottom:6px; border-radius:4px;
+            border:1px solid #d8c898; cursor:pointer;
+            background:rgba(255,255,255,0.6); transition:all 0.2s;
+            font-size:0.93em; color:#3a2800; line-height:1.5;
+        }
+        .quiz-option:hover { background:rgba(200,168,74,0.12); border-color:#c8a84a; }
+        .quiz-option.correct { background:rgba(42,110,63,0.12); border-color:#2a6e3f; color:#1a4a2a; }
+        .quiz-option.wrong   { background:rgba(150,26,10,0.09); border-color:#961a0a; color:#6a1000; }
+        .quiz-option.disabled { cursor:default; }
+        .quiz-key { font-weight:700; min-width:20px; }
+        .quiz-explanation {
+            font-size:0.82em; color:#6a4800; background:rgba(200,168,74,0.12);
+            border-left:3px solid #c8a84a; padding:8px 12px; margin-top:8px;
+            border-radius:0 3px 3px 0; line-height:1.6; display:none;
+        }
+        .quiz-score {
+            text-align:center; padding:20px; border-top:1px dashed #c8a84a;
+            font-size:1.1em; color:#4a3000; display:none;
+        }
+        .quiz-score .score-num { font-size:2em; font-weight:700; color:var(--accent-red); }
+
+    
+        /* ══ Phase 6: 打卡 & 成就 ══════════════════════════ */
+        .streak-row {
+            display:flex; align-items:center; gap:8px;
+            background:rgba(200,168,74,0.1); border:1px solid #d8c898;
+            border-radius:6px; padding:8px 12px; margin-bottom:8px;
+        }
+        .streak-flame { font-size:1.4em; }
+        .streak-info { flex:1; }
+        #streak-num { font-size:1.6em; font-weight:700; color:var(--accent-red); }
+        .streak-unit { font-size:0.72em; color:#a07830; margin-left:3px; }
+        .checkin-btn {
+            background:var(--mood-accent,var(--accent-red)); color:#FDF6E3;
+            border:none; padding:5px 12px; border-radius:4px;
+            font-family:'Noto Serif SC',serif; font-size:0.78em;
+            cursor:pointer; letter-spacing:1px; transition:all 0.2s; white-space:nowrap;
+        }
+        .checkin-btn:hover { filter:brightness(1.15); }
+        .checkin-btn.done { background:#aaa; cursor:default; }
+        .streak-dots { display:flex; gap:4px; flex-wrap:wrap; margin-bottom:4px; }
+        .streak-dot {
+            width:8px; height:8px; border-radius:50%;
+            background:#ddd; border:1px solid #ccc;
+        }
+        .streak-dot.lit { background:var(--mood-accent,var(--accent-red)); border-color:var(--mood-accent,var(--accent-red)); }
+
+        .badges-wrap { display:flex; flex-wrap:wrap; gap:5px; }
+        .badge-chip {
+            background:linear-gradient(135deg,#fff8e8,#f5e8c0);
+            border:1px solid #c8a84a; border-radius:10px;
+            padding:2px 10px; font-size:0.72em; color:#7a5000;
+            box-shadow:0 1px 3px rgba(0,0,0,0.06);
+        }
+        .badge-new { animation:badge-pop 0.5s cubic-bezier(0.34,1.56,0.64,1); }
+        @keyframes badge-pop { 0%{transform:scale(0);opacity:0;} 100%{transform:scale(1);opacity:1;} }
+
+        .digest-btn {
+            display:block; width:100%; margin-top:12px;
+            background:transparent; border:1px dashed #c8a84a;
+            color:#8a6200; padding:7px 0; border-radius:4px;
+            font-family:'Noto Serif SC',serif; font-size:0.82em;
+            letter-spacing:2px; cursor:pointer; transition:all 0.2s;
+        }
+        .digest-btn:hover { background:rgba(200,168,74,0.1); }
+
+        /* 新徽章解锁通知 toast */
+        #badge-toast {
+            position:fixed; bottom:100px; left:50%; transform:translateX(-50%) translateY(20px);
+            background:linear-gradient(135deg,#fffbf0,#f5ead6); border:1px solid #c8a84a;
+            border-radius:8px; padding:12px 24px; font-size:0.9em; color:#4a3000;
+            box-shadow:0 8px 30px rgba(0,0,0,0.15); z-index:800;
+            opacity:0; pointer-events:none; transition:all 0.4s;
+            text-align:center; letter-spacing:1px;
+        }
+        #badge-toast.show { opacity:1; transform:translateX(-50%) translateY(0); }
+
+        /* 分享卡浮层 */
+        #share-overlay { position:fixed; inset:0; z-index:650;
+            display:flex; align-items:center; justify-content:center;
+            background:rgba(10,6,2,0.72); backdrop-filter:blur(4px);
+            opacity:0; pointer-events:none; transition:opacity 0.35s ease; }
+        #share-overlay.open { opacity:1; pointer-events:all; }
+        #share-modal { background:linear-gradient(160deg,#fdf8ef,#f3e8d0);
+            border:1px solid #c8a84a; border-radius:8px; width:min(90vw,480px);
+            box-shadow:0 24px 80px rgba(0,0,0,0.3);
+            transform:translateY(24px) scale(0.97);
+            transition:transform 0.4s cubic-bezier(0.34,1.46,0.64,1); overflow:hidden; }
+        #share-overlay.open #share-modal { transform:translateY(0) scale(1); }
+        #share-canvas-wrap { padding:20px 20px 0; display:flex; justify-content:center; }
+        #share-canvas { border-radius:6px; max-width:100%; }
+        .share-actions { display:flex; gap:10px; padding:16px 20px 20px; }
+        .share-dl-btn { flex:1; background:var(--accent-red); color:#FDF6E3; border:none;
+            padding:10px; font-family:'Noto Serif SC',serif; font-size:0.9em;
+            letter-spacing:2px; cursor:pointer; border-radius:4px; transition:filter 0.2s; }
+        .share-dl-btn:hover { filter:brightness(1.15); }
+        .share-close-btn { background:transparent; border:1px solid #c8a84a;
+            color:#8a6200; padding:10px 18px; font-family:'Noto Serif SC',serif;
+            font-size:0.9em; cursor:pointer; border-radius:4px; }
+
+        /* 每日速递 Modal */
+        #digest-overlay { position:fixed; inset:0; z-index:620;
+            display:flex; align-items:center; justify-content:center;
+            background:rgba(10,6,2,0.68); backdrop-filter:blur(4px);
+            opacity:0; pointer-events:none; transition:opacity 0.35s ease; }
+        #digest-overlay.open { opacity:1; pointer-events:all; }
+        #digest-modal { background:linear-gradient(160deg,#fdf8ef,#f3e8d0);
+            border:1px solid #c8a84a; border-radius:8px; width:min(90vw,560px);
+            max-height:min(88vh,640px); overflow-y:auto;
+            box-shadow:0 24px 80px rgba(0,0,0,0.3);
+            transform:translateY(24px) scale(0.97);
+            transition:transform 0.4s cubic-bezier(0.34,1.46,0.64,1); }
+        #digest-overlay.open #digest-modal { transform:translateY(0) scale(1); }
+        .digest-header { padding:18px 28px 14px; border-bottom:1px solid rgba(200,168,74,0.35);
+            display:flex; align-items:center; justify-content:space-between; }
+        .digest-title { font-size:1.0em; letter-spacing:3px; color:#6a4000; font-weight:600; }
+        .digest-body { padding:24px 30px 30px; }
+        .digest-section { margin-bottom:20px; }
+        .digest-label { font-size:0.72em; letter-spacing:3px; color:#a07830; margin-bottom:6px; }
+        .digest-text { font-size:0.98em; line-height:1.85; color:#2c1800; }
+        .digest-quote-block {
+            border-left:3px solid #c8a84a; padding:10px 16px;
+            background:rgba(200,168,74,0.1); border-radius:0 4px 4px 0;
+            font-style:italic; color:#4a3000; margin-bottom:6px;
+        }
+        .digest-source { font-size:0.78em; color:#a07830; text-align:right; }
+        .digest-invite {
+            background:rgba(139,29,29,0.06); border:1px dashed #c8a84a;
+            border-radius:4px; padding:12px 16px; font-size:0.9em;
+            color:#6a3000; text-align:center; line-height:1.7;
+        }
+        .digest-loading { text-align:center; padding:50px; color:#a07830; font-style:italic; }
+
+    
+        /* ══ Phase 7: 氛围音效控制栏 ══════════════════════════ */
+        #ambient-bar {
+            position: fixed;
+            top: 36px; right: 14px;
+            z-index: 210;
+            display: flex; align-items: center; gap: 8px;
+            background: rgba(253,246,227,0.88);
+            border: 1px solid var(--mood-border, var(--border-gold));
+            border-radius: 20px; padding: 5px 12px;
+            font-size: 0.75em; color: var(--mood-accent, var(--accent-red));
+            letter-spacing: 1px; backdrop-filter: blur(6px);
+            opacity: 0; transition: opacity 0.8s ease, border-color 0.8s ease;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.06);
+        }
+        #ambient-bar.visible { opacity: 1; }
+        #ambient-toggle {
+            background: none; border: none; cursor: pointer;
+            font-size: 1.1em; padding: 0; line-height: 1;
+            color: var(--mood-accent, var(--accent-red));
+            transition: transform 0.2s;
+        }
+        #ambient-toggle:hover { transform: scale(1.2); }
+        #ambient-label { font-size: 0.9em; opacity: 0.8; }
+        #ambient-vol {
+            -webkit-appearance: none; appearance: none;
+            width: 54px; height: 3px; border-radius: 2px;
+            background: var(--mood-border, var(--border-gold));
+            outline: none; cursor: pointer;
+        }
+        #ambient-vol::-webkit-slider-thumb {
+            -webkit-appearance: none; width: 10px; height: 10px;
+            border-radius: 50%; background: var(--mood-accent, var(--accent-red));
+            cursor: pointer;
+        }
+
+        /* ══ Phase 7: TTS 语音按钮 ════════════════════════════ */
+        .tts-btn {
+            background: none; border: none; cursor: pointer;
+            font-size: 0.85em; color: #a07830; padding: 0 4px;
+            opacity: 0.7; transition: opacity 0.2s, transform 0.2s;
+            vertical-align: middle; font-family: serif;
+        }
+        .tts-btn:hover { opacity: 1; transform: scale(1.1); }
+        .tts-btn.playing { color: var(--accent-red); animation: pulse 1s infinite; }
+
+        /* 音频播放浮条 */
+        #audio-player-bar {
+            position: fixed; bottom: 130px; left: 50%;
+            transform: translateX(-50%);
+            z-index: 300; display: flex; align-items: center; gap: 10px;
+            background: rgba(253,246,227,0.95); border: 1px solid #c8a84a;
+            border-radius: 24px; padding: 8px 18px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.12); backdrop-filter: blur(8px);
+            font-size: 0.82em; color: #4a3000; letter-spacing: 1px;
+            opacity: 0; pointer-events: none; transition: opacity 0.3s ease;
+        }
+        #audio-player-bar.visible { opacity: 1; pointer-events: all; }
+        #audio-speaker-name { font-weight: 600; color: var(--accent-red); }
+        #audio-progress {
+            -webkit-appearance: none; appearance: none;
+            width: 120px; height: 3px; border-radius: 2px;
+            background: #d8c898; outline: none; cursor: pointer;
+        }
+        #audio-progress::-webkit-slider-thumb {
+            -webkit-appearance: none; width: 10px; height: 10px;
+            border-radius: 50%; background: var(--accent-red); cursor: pointer;
+        }
+        #audio-stop-btn {
+            background: none; border: none; cursor: pointer;
+            color: #a07830; font-size: 1.1em; padding: 0;
+        }
+
+        /* ══ Phase 7: 场景图像面板 ════════════════════════════ */
+        #scene-image-panel {
+            position: fixed; right: 14px; bottom: 150px;
+            z-index: 205; width: 200px;
+            opacity: 0; pointer-events: none; transition: opacity 0.6s ease;
+        }
+        #scene-image-panel.visible { opacity: 1; pointer-events: all; }
+        #scene-img {
+            width: 100%; border-radius: 6px;
+            border: 1px solid #c8a84a;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+        }
+        #scene-img-caption {
+            font-size: 0.7em; color: #a07830; text-align: center;
+            margin-top: 4px; letter-spacing: 1px;
+        }
+        #scene-gen-btn {
+            display: block; width: 100%; margin-top: 6px;
+            background: transparent; border: 1px dashed #c8a84a;
+            color: #8a6200; padding: 5px 0; border-radius: 4px;
+            font-family: 'Noto Serif SC', serif; font-size: 0.75em;
+            letter-spacing: 1px; cursor: pointer; transition: all 0.2s;
+        }
+        #scene-gen-btn:hover { background: rgba(200,168,74,0.12); }
+        #scene-gen-btn:disabled { opacity: 0.5; cursor: wait; }
+
     </style>
 </head>
 <body>
@@ -302,6 +600,31 @@
         <span id="mood-motif" style="opacity:0.6;font-size:0.9em;"></span>
     </div>
     <div id="mood-flash"></div>
+
+    <!-- Phase 7: 氛围音效控制栏 -->
+    <div id="ambient-bar">
+        <button id="ambient-toggle" onclick="toggleAmbient()" title="氛围音效">🔇</button>
+        <span id="ambient-label">静</span>
+        <input type="range" id="ambient-vol" min="0" max="1" step="0.05" value="0.35"
+            oninput="setAmbientVolume(this.value)" title="音量">
+    </div>
+
+    <!-- Phase 7: TTS 音频播放浮条 -->
+    <div id="audio-player-bar">
+        <span>🔊</span>
+        <span id="audio-speaker-name">—</span>
+        <input type="range" id="audio-progress" value="0" min="0" max="100" step="1"
+            oninput="seekAudio(this.value)">
+        <button id="audio-stop-btn" onclick="stopTTS()">✕</button>
+    </div>
+
+    <!-- Phase 7: 场景图像侧边面板 -->
+    <div id="scene-image-panel">
+        <img id="scene-img" src="" alt="场景图像" style="display:none;">
+        <div id="scene-img-caption">水墨场景</div>
+        <button id="scene-gen-btn" onclick="generateSceneImage()">🎨 生成场景图</button>
+    </div>
+
 
     <!-- 情境知识气泡 -->
     <div id="knowledge-bubble">
@@ -398,15 +721,36 @@
             </div>
 
             <!-- 3. 探索成长面板 -->
+            <!-- 3. 探索档案 + 打卡 + 成就 -->
             <div class="side-panel" id="profile-panel">
                 <div class="side-panel-title">探 索 档 案</div>
                 <div style="text-align:center;">
                     <div class="title-badge" id="profile-title">初入时空</div>
                 </div>
-                <div class="profile-stat">⏳ 累计 <span id="p-sessions">0</span> 次会话 · <span id="p-rounds">0</span> 回合</div>
+
+                <!-- 连续打卡 -->
+                <div class="streak-row" id="streak-row">
+                    <div class="streak-flame" id="streak-flame">🔥</div>
+                    <div class="streak-info">
+                        <span id="streak-num">0</span>
+                        <span class="streak-unit">天连续探索</span>
+                    </div>
+                    <button class="checkin-btn" id="checkin-btn" onclick="doCheckin()">签到</button>
+                </div>
+                <div class="streak-dots" id="streak-dots"></div>
+
+                <div class="profile-stat" style="margin-top:8px;">⏳ 累计 <span id="p-sessions">0</span> 次 · <span id="p-rounds">0</span> 回合</div>
                 <div class="profile-stat">📜 已历朝代：</div>
                 <div class="era-tags" id="p-eras"><span style="color:#bbb;font-size:0.8em;">尚未探索</span></div>
+
+                <!-- 成就徽章 -->
+                <div id="badges-section" style="margin-top:10px;display:none;">
+                    <div style="font-size:0.72em;letter-spacing:2px;color:#a07830;margin-bottom:6px;">✦ 成 就 解 锁</div>
+                    <div class="badges-wrap" id="badges-wrap"></div>
+                </div>
+
                 <div class="profile-hint" id="p-hint"></div>
+                <button class="digest-btn" onclick="openDigest()">📰 今日时空速递</button>
             </div>
 
             <!-- 4. 时空焦点产物 -->
@@ -432,7 +776,11 @@
             <input type="text" id="playerDialogue" placeholder="对他们说点什么..." style="flex:0.7;">
             <button onclick="sendPlayerAction()">发言</button>
         </div>
-        <button class="advance-btn" id="nextBtn" onclick="nextRound()" style="margin-top:5px;">推进时空演化 (Advance)</button>
+        <div style="display:flex;gap:12px;margin-top:5px;align-items:center;">
+            <button class="advance-btn" id="nextBtn" onclick="nextRound()">推进时空演化 (Advance)</button>
+            <button class="advance-btn" id="graphBtn" onclick="openGraph()" style="background:transparent;border:1px solid var(--accent-red);color:var(--accent-red);padding:9px 18px;font-size:0.9em;letter-spacing:1px;">🕸 关系图谱</button>
+            <button class="advance-btn" id="quizBtn" onclick="startQuiz()" style="background:transparent;border:1px solid #2C3E50;color:#2C3E50;padding:9px 18px;font-size:0.9em;letter-spacing:1px;">📜 记忆测验</button>
+        </div>
     </div>
 
     <script>
@@ -694,6 +1042,8 @@
             fetchWorldState();
             nextRound();
             refreshProfile();
+            initCheckin();
+            showScenePanel();
         }
 
         async function fetchWorldState() {
@@ -936,6 +1286,7 @@
                 markTerms(el);
             });
 
+            if (!isPlayer) addShareBtnToLastCard();
             scrollToBottom();
         }
 
@@ -964,6 +1315,906 @@
         function scrollToBottom() {
             window.scrollTo({top: document.body.scrollHeight, behavior:'smooth'});
         }
+    
+        /* ══ D3 知识图谱 ════════════════════════════════════
+           依赖：D3 v7（从 cdnjs 动态加载）
+           ════════════════════════════════════════════════ */
+        let d3Loaded = false;
+        function loadD3(cb) {
+            if (d3Loaded) { cb(); return; }
+            const s = document.createElement('script');
+            s.src = 'https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js';
+            s.onload = () => { d3Loaded = true; cb(); };
+            document.head.appendChild(s);
+        }
+
+        async function openGraph() {
+            if (!currentSessionId) return;
+            document.getElementById('graph-overlay').classList.add('open');
+            document.getElementById('graph-svg').innerHTML = '<text x="50%" y="50%" text-anchor="middle" fill="#a07830" dy="0.3em" font-family="serif">图谱加载中...</text>';
+            try {
+                const res = await fetch('/api/graph/' + currentSessionId);
+                if (!res.ok) { throw new Error('network'); }
+                const data = await res.json();
+                loadD3(() => renderGraph(data));
+            } catch(e) {
+                document.getElementById('graph-svg').innerHTML =
+                    '<text x="50%" y="50%" text-anchor="middle" fill="#961a0a" dy="0.3em" font-family="serif">图谱暂无数据</text>';
+            }
+        }
+
+        function closeGraph() {
+            document.getElementById('graph-overlay').classList.remove('open');
+        }
+        document.getElementById('graph-overlay').addEventListener('click', function(e) {
+            if (e.target === this) closeGraph();
+        });
+
+        function renderGraph(data) {
+            const wrap = document.getElementById('graph-svg-wrap');
+            const W = wrap.clientWidth || 700;
+            const H = wrap.clientHeight || 480;
+            const svgEl = document.getElementById('graph-svg');
+            svgEl.innerHTML = '';
+            svgEl.setAttribute('viewBox', `0 0 ${W} ${H}`);
+
+            const tooltip = document.getElementById('graph-tooltip');
+
+            const svg = d3.select('#graph-svg');
+
+            // Arrow markers
+            svg.append('defs').selectAll('marker')
+                .data(['default'])
+                .join('marker')
+                .attr('id', 'arrow')
+                .attr('viewBox', '0 -4 8 8')
+                .attr('refX', 22).attr('refY', 0)
+                .attr('markerWidth', 5).attr('markerHeight', 5)
+                .attr('orient', 'auto')
+                .append('path')
+                .attr('d', 'M0,-4L8,0L0,4')
+                .attr('fill', '#c8a84a').attr('opacity', 0.6);
+
+            const g = svg.append('g');
+
+            // zoom
+            svg.call(d3.zoom().scaleExtent([0.3, 3]).on('zoom', (event) => {
+                g.attr('transform', event.transform);
+            }));
+
+            const nodes = data.nodes.map(n => ({...n}));
+            const edges = data.edges.map(e => ({...e}));
+
+            // Trust → color scale
+            const trustColor = d3.scaleLinear()
+                .domain([0, 50, 100])
+                .range(['#e05a3a', '#c8a84a', '#2a9d5c']);
+
+            // Force simulation
+            const sim = d3.forceSimulation(nodes)
+                .force('link', d3.forceLink(edges).id(d => d.id).distance(d => 160 - (d.affinity || 50) * 0.7))
+                .force('charge', d3.forceManyBody().strength(-260))
+                .force('center', d3.forceCenter(W/2, H/2))
+                .force('collision', d3.forceCollide(40));
+
+            // Edges
+            const link = g.append('g').selectAll('line')
+                .data(edges)
+                .join('line')
+                .attr('stroke', d => trustColor((d.trust||50)))
+                .attr('stroke-width', d => 1.5 + (d.affinity||50) * 0.04)
+                .attr('stroke-opacity', 0.65)
+                .attr('marker-end', 'url(#arrow)');
+
+            // Edge labels (affinity/trust)
+            const edgeLabel = g.append('g').selectAll('text')
+                .data(edges)
+                .join('text')
+                .attr('font-size', 9)
+                .attr('fill', '#a07030')
+                .attr('text-anchor', 'middle')
+                .attr('dy', -3)
+                .text(d => `亲${d.affinity||50} 信${d.trust||50}`);
+
+            // Nodes
+            const node = g.append('g').selectAll('g')
+                .data(nodes)
+                .join('g')
+                .attr('cursor', 'pointer')
+                .call(d3.drag()
+                    .on('start', (event, d) => { if (!event.active) sim.alphaTarget(0.3).restart(); d.fx=d.x; d.fy=d.y; })
+                    .on('drag',  (event, d) => { d.fx=event.x; d.fy=event.y; })
+                    .on('end',   (event, d) => { if (!event.active) sim.alphaTarget(0); d.fx=null; d.fy=null; }));
+
+            node.append('circle')
+                .attr('r', 24)
+                .attr('fill', '#fdf6e3')
+                .attr('stroke', d => d.task_role === '主角' ? '#8B1D1D' : '#c8a84a')
+                .attr('stroke-width', d => d.task_role === '主角' ? 3 : 1.8)
+                .attr('filter', 'drop-shadow(1px 2px 4px rgba(0,0,0,0.12))');
+
+            node.append('text')
+                .attr('text-anchor', 'middle')
+                .attr('dy', '0.35em')
+                .attr('font-family', 'Noto Serif SC, serif')
+                .attr('font-size', d => d.label.length <= 2 ? 13 : 10)
+                .attr('fill', '#3a2000')
+                .text(d => d.label.slice(0, 4));
+
+            node.append('text')
+                .attr('text-anchor', 'middle')
+                .attr('dy', '2.4em')
+                .attr('font-family', 'serif')
+                .attr('font-size', 8)
+                .attr('fill', '#a07030')
+                .text(d => d.identity ? d.identity.slice(0, 8) : '');
+
+            // Hover tooltip
+            node.on('mouseover', (event, d) => {
+                tooltip.innerHTML = `<b>${d.label}</b><br>${d.identity||''}<br><span style="color:#a07030">${d.era||''} · ${d.task_role||''}</span>`;
+                tooltip.classList.add('visible');
+            }).on('mousemove', (event) => {
+                tooltip.style.left = (event.clientX + 14) + 'px';
+                tooltip.style.top  = (event.clientY + 14) + 'px';
+            }).on('mouseout', () => {
+                tooltip.classList.remove('visible');
+            });
+
+            sim.on('tick', () => {
+                link
+                    .attr('x1', d => d.source.x).attr('y1', d => d.source.y)
+                    .attr('x2', d => d.target.x).attr('y2', d => d.target.y);
+                edgeLabel
+                    .attr('x', d => (d.source.x + d.target.x)/2)
+                    .attr('y', d => (d.source.y + d.target.y)/2);
+                node.attr('transform', d => `translate(${d.x},${d.y})`);
+            });
+
+            // Milestones annotation
+            if (data.milestones && data.milestones.length > 0) {
+                const ms = data.milestones.slice(0, 3);
+                const ann = svg.append('g').attr('transform', `translate(${W-10},10)`);
+                ann.append('rect')
+                    .attr('x', -200).attr('y', 0).attr('width', 195).attr('height', ms.length * 18 + 22)
+                    .attr('rx', 4).attr('fill', 'rgba(253,246,227,0.9)').attr('stroke', '#c8a84a').attr('stroke-width', 0.8);
+                ann.append('text').attr('x', -100).attr('y', 16)
+                    .attr('text-anchor', 'middle').attr('font-size', 9).attr('fill', '#a07030')
+                    .text('▸ 叙事里程碑');
+                ms.forEach((m, i) => {
+                    ann.append('text').attr('x', -196).attr('y', 32 + i*17)
+                        .attr('font-size', 8.5).attr('fill', '#4a3010')
+                        .text(m.length > 22 ? m.slice(0, 22) + '…' : m);
+                });
+            }
+        }
+
+        /* ══ 会话后小测验 ════════════════════════════════════ */
+        let quizQuestions = [];
+        let quizScore = 0;
+        let quizAnswered = 0;
+
+        async function startQuiz() {
+            if (!currentSessionId) return;
+            document.getElementById('quiz-overlay').classList.add('open');
+            const body = document.getElementById('quiz-body');
+            body.innerHTML = '<div class="quiz-loading">📖 典籍整理中，为您定制历史测验（约 10 秒）...</div>';
+            quizQuestions = []; quizScore = 0; quizAnswered = 0;
+
+            try {
+                const res = await fetch('/api/quiz', {
+                    method:'POST', headers:{'Content-Type':'application/json'},
+                    body: JSON.stringify({session_id: currentSessionId, user_id: currentUserId})
+                });
+                const data = await res.json();
+                if (data.status !== 'success' || !data.questions.length) {
+                    body.innerHTML = '<div class="quiz-loading">暂无足够对话内容生成测验，请多推进几回合后再试。</div>';
+                    return;
+                }
+                quizQuestions = data.questions;
+                renderQuiz(quizQuestions);
+            } catch(e) {
+                body.innerHTML = '<div class="quiz-loading">⚠ 连接异常，无法生成测验。</div>';
+            }
+        }
+
+        function renderQuiz(questions) {
+            const body = document.getElementById('quiz-body');
+            const KEYS = ['A','B','C','D'];
+            let html = '';
+            questions.forEach((q, qi) => {
+                html += `<div class="quiz-q" id="qq-${qi}">
+                    <div class="quiz-q-num">第 ${qi+1} 题 / 共 ${questions.length} 题</div>
+                    <div class="quiz-q-text">${q.q}</div>`;
+                KEYS.forEach(k => {
+                    if (!q.options[k]) return;
+                    html += `<div class="quiz-option" id="qo-${qi}-${k}" onclick="answerQuiz(${qi},'${k}')">
+                        <span class="quiz-key">${k}</span>
+                        <span>${q.options[k]}</span>
+                    </div>`;
+                });
+                html += `<div class="quiz-explanation" id="qe-${qi}">${q.explanation}</div></div>`;
+            });
+            html += `<div class="quiz-score" id="quiz-score">
+                <div>本次测验得分</div>
+                <div class="score-num" id="score-display">0</div>
+                <div style="font-size:0.82em;color:#888;margin-top:6px;" id="score-comment"></div>
+            </div>`;
+            body.innerHTML = html;
+        }
+
+        function answerQuiz(qi, chosen) {
+            const q = quizQuestions[qi];
+            if (!q) return;
+            const KEYS = ['A','B','C','D'];
+            // Disable all options for this question
+            KEYS.forEach(k => {
+                const opt = document.getElementById(`qo-${qi}-${k}`);
+                if (!opt) return;
+                opt.classList.add('disabled');
+                opt.onclick = null;
+                if (k === q.answer) opt.classList.add('correct');
+                else if (k === chosen && k !== q.answer) opt.classList.add('wrong');
+            });
+            // Show explanation
+            const expEl = document.getElementById(`qe-${qi}`);
+            if (expEl) expEl.style.display = 'block';
+            // Score
+            if (chosen === q.answer) quizScore++;
+            quizAnswered++;
+            // All answered → show total score
+            if (quizAnswered >= quizQuestions.length) {
+                setTimeout(() => {
+                    const scoreEl = document.getElementById('quiz-score');
+                    if (scoreEl) scoreEl.style.display = 'block';
+                    document.getElementById('score-display').textContent =
+                        quizScore + ' / ' + quizQuestions.length;
+                    const pct = quizScore / quizQuestions.length;
+                    const comments = pct===1 ? '满分！时空记忆完美无缺'
+                        : pct>=0.67 ? '不错！历史情境已深入心间'
+                        : pct>=0.34 ? '尚可，多推演几局将融会贯通'
+                        : '时空太过久远，再来一局吧';
+                    document.getElementById('score-comment').textContent = comments;
+                    scoreEl.scrollIntoView({behavior:'smooth'});
+                }, 400);
+            }
+        }
+
+        function closeQuiz() {
+            document.getElementById('quiz-overlay').classList.remove('open');
+        }
+        document.getElementById('quiz-overlay').addEventListener('click', function(e) {
+            if (e.target === this) closeQuiz();
+        });
+
+    
+        /* ══ Phase 6: 连续打卡 ════════════════════════════════ */
+        async function initCheckin() {
+            try {
+                const res = await fetch('/api/checkin/' + currentUserId);
+                if (!res.ok) return;
+                const d = await res.json();
+                renderStreakUI(d.streak, d.checked_in_today, d.all_badges);
+            } catch(e) {}
+        }
+
+        async function doCheckin() {
+            const btn = document.getElementById('checkin-btn');
+            if (btn.classList.contains('done')) return;
+            btn.textContent = '...';
+            try {
+                const res = await fetch('/api/checkin', {
+                    method:'POST', headers:{'Content-Type':'application/json'},
+                    body: JSON.stringify({user_id: currentUserId})
+                });
+                const d = await res.json();
+                renderStreakUI(d.streak, true, d.all_badges);
+                if (d.newly_unlocked_badges && d.newly_unlocked_badges.length > 0) {
+                    showBadgeToast(d.newly_unlocked_badges);
+                } else if (d.is_new_day) {
+                    showBadgeToast(null, d.streak);
+                }
+                await refreshProfile();
+            } catch(e) {
+                btn.textContent = '签到';
+            }
+        }
+
+        function renderStreakUI(streak, checkedToday, badges) {
+            document.getElementById('streak-num').textContent = streak;
+            const btn = document.getElementById('checkin-btn');
+            if (checkedToday) {
+                btn.textContent = '✓ 已签';
+                btn.classList.add('done');
+            } else {
+                btn.textContent = '签到';
+                btn.classList.remove('done');
+            }
+            // 7-dot week indicator
+            const dotsEl = document.getElementById('streak-dots');
+            dotsEl.innerHTML = '';
+            const lit = Math.min(streak, 7);
+            for (let i = 0; i < 7; i++) {
+                const d = document.createElement('div');
+                d.className = 'streak-dot' + (i < lit ? ' lit' : '');
+                dotsEl.appendChild(d);
+            }
+            // Badges
+            if (badges && badges.length > 0) {
+                const sec = document.getElementById('badges-section');
+                const wrap = document.getElementById('badges-wrap');
+                sec.style.display = '';
+                wrap.innerHTML = badges.map(b => `<span class="badge-chip">🏅 ${b}</span>`).join('');
+            }
+        }
+
+        function showBadgeToast(badges, streak) {
+            const toast = document.getElementById('badge-toast');
+            if (badges && badges.length > 0) {
+                toast.innerHTML = `🏅 新成就解锁：${badges.join(' · ')}`;
+            } else {
+                toast.innerHTML = `🔥 连续探索第 ${streak} 天！坚持就是力量`;
+            }
+            toast.classList.add('show');
+            setTimeout(() => toast.classList.remove('show'), 3500);
+        }
+
+        /* ══ Phase 6: 每日时空速递 ════════════════════════════ */
+        async function openDigest() {
+            document.getElementById('digest-overlay').classList.add('open');
+            document.getElementById('digest-body').innerHTML =
+                '<div class="digest-loading">📰 时空典籍编撰中，为您准备今日速递（约 10 秒）...</div>';
+            try {
+                const res = await fetch('/api/daily_digest', {
+                    method:'POST', headers:{'Content-Type':'application/json'},
+                    body: JSON.stringify({user_id: currentUserId})
+                });
+                const data = await res.json();
+                if (data.status !== 'success') throw new Error(data.message);
+                renderDigest(data.digest, data.date);
+            } catch(e) {
+                document.getElementById('digest-body').innerHTML =
+                    '<div class="digest-loading">⚠ 速递暂时无法送达，请稍后再试。</div>';
+            }
+        }
+
+        function renderDigest(d, date) {
+            const body = document.getElementById('digest-body');
+            body.innerHTML = `
+                <div class="digest-section">
+                    <div class="digest-label">▸ ${date} 时空速递</div>
+                    <div style="font-size:1.15em;font-weight:700;color:#4a2800;margin-bottom:12px;">${d.title || ''}</div>
+                </div>
+                <div class="digest-section">
+                    <div class="digest-label">今 日 史 事</div>
+                    <div class="digest-text">${d.today_event || ''}</div>
+                </div>
+                <div class="digest-section">
+                    <div class="digest-label">古 今 镜 像</div>
+                    <div class="digest-text" style="color:#4a5580;">${d.mirror || ''}</div>
+                </div>
+                <div class="digest-section">
+                    <div class="digest-label">人 文 金 句</div>
+                    <div class="digest-quote-block">${d.quote || ''}</div>
+                    <div class="digest-source">——${d.quote_source || ''}</div>
+                </div>
+                <div class="digest-invite">${d.invitation || ''}</div>
+            `;
+        }
+
+        function closeDigest() {
+            document.getElementById('digest-overlay').classList.remove('open');
+        }
+        document.getElementById('digest-overlay').addEventListener('click', function(e) {
+            if (e.target === this) closeDigest();
+        });
+
+        /* ══ Phase 6: 金句分享卡 Canvas ══════════════════════
+           用法：在对话中选中文字后右键「分享金句」（或点击对话卡上的按钮）
+           这里提供全局 API：openShareCard(quote, speaker, era)
+           ════════════════════════════════════════════════ */
+        let _shareCardData = null;
+
+        async function openShareCard(quote, speaker, era) {
+            document.getElementById('share-overlay').classList.add('open');
+            // 先用 placeholder 渲染
+            _shareCardData = {quote, speaker, era, modern_note: '...'};
+            drawShareCanvas(_shareCardData);
+            try {
+                const res = await fetch('/api/share_card', {
+                    method:'POST', headers:{'Content-Type':'application/json'},
+                    body: JSON.stringify({session_id: currentSessionId, quote, speaker, era})
+                });
+                _shareCardData = await res.json();
+                drawShareCanvas(_shareCardData);
+            } catch(e) {}
+        }
+
+        function drawShareCanvas(d) {
+            const canvas = document.getElementById('share-canvas');
+            const ctx = canvas.getContext('2d');
+            const W = canvas.width, H = canvas.height;
+
+            // Background gradient
+            const bg = ctx.createLinearGradient(0, 0, W, H);
+            bg.addColorStop(0, '#fdf8ef');
+            bg.addColorStop(1, '#f0e0c0');
+            ctx.fillStyle = bg;
+            ctx.beginPath();
+            roundRect(ctx, 0, 0, W, H, 10);
+            ctx.fill();
+
+            // Decorative border
+            ctx.strokeStyle = '#c8a84a';
+            ctx.lineWidth = 1.5;
+            ctx.beginPath();
+            roundRect(ctx, 6, 6, W-12, H-12, 7);
+            ctx.stroke();
+
+            // Inner thin border
+            ctx.strokeStyle = 'rgba(200,168,74,0.3)';
+            ctx.lineWidth = 0.8;
+            ctx.beginPath();
+            roundRect(ctx, 12, 12, W-24, H-24, 5);
+            ctx.stroke();
+
+            // Era tag
+            if (d.era) {
+                ctx.fillStyle = 'rgba(200,168,74,0.2)';
+                ctx.beginPath();
+                roundRect(ctx, 20, 18, 70, 20, 10);
+                ctx.fill();
+                ctx.fillStyle = '#8a6200';
+                ctx.font = '11px serif';
+                ctx.textAlign = 'left';
+                ctx.fillText(d.era, 28, 32);
+            }
+
+            // Speaker
+            ctx.fillStyle = '#8B1D1D';
+            ctx.font = 'bold 13px serif';
+            ctx.textAlign = 'right';
+            ctx.fillText(d.speaker || '', W - 22, 32);
+
+            // Quote text (wrap)
+            ctx.fillStyle = '#2c1800';
+            ctx.font = '15px Noto Serif SC, serif';
+            ctx.textAlign = 'center';
+            const lines = wrapText(ctx, '「' + (d.quote || '') + '」', W - 60, 15);
+            const totalH = lines.length * 26;
+            const startY = (H - totalH) / 2 - 10;
+            lines.forEach((line, i) => ctx.fillText(line, W/2, startY + i * 26));
+
+            // Divider
+            const divY = startY + totalH + 14;
+            ctx.strokeStyle = 'rgba(200,168,74,0.4)';
+            ctx.lineWidth = 0.8;
+            ctx.beginPath();
+            ctx.moveTo(40, divY); ctx.lineTo(W-40, divY);
+            ctx.stroke();
+
+            // Modern note
+            ctx.fillStyle = '#6a5030';
+            ctx.font = 'italic 11px serif';
+            ctx.textAlign = 'center';
+            ctx.fillText(d.modern_note || '', W/2, divY + 18);
+
+            // Watermark
+            ctx.fillStyle = 'rgba(160,120,48,0.5)';
+            ctx.font = '10px serif';
+            ctx.textAlign = 'right';
+            ctx.fillText(d.watermark || '息壤 · 人文时空', W - 18, H - 14);
+        }
+
+        function wrapText(ctx, text, maxW, size) {
+            const words = text.split('');
+            const lines = [];
+            let cur = '';
+            for (const ch of words) {
+                const test = cur + ch;
+                if (ctx.measureText(test).width > maxW && cur) {
+                    lines.push(cur);
+                    cur = ch;
+                } else { cur = test; }
+            }
+            if (cur) lines.push(cur);
+            return lines;
+        }
+
+        function roundRect(ctx, x, y, w, h, r) {
+            ctx.moveTo(x+r, y);
+            ctx.lineTo(x+w-r, y);
+            ctx.arcTo(x+w, y, x+w, y+r, r);
+            ctx.lineTo(x+w, y+h-r);
+            ctx.arcTo(x+w, y+h, x+w-r, y+h, r);
+            ctx.lineTo(x+r, y+h);
+            ctx.arcTo(x, y+h, x, y+h-r, r);
+            ctx.lineTo(x, y+r);
+            ctx.arcTo(x, y, x+r, y, r);
+        }
+
+        function downloadShareCard() {
+            const canvas = document.getElementById('share-canvas');
+            const a = document.createElement('a');
+            a.download = '息壤金句.png';
+            a.href = canvas.toDataURL('image/png');
+            a.click();
+        }
+
+        function closeShareCard() {
+            document.getElementById('share-overlay').classList.remove('open');
+        }
+        document.getElementById('share-overlay').addEventListener('click', function(e) {
+            if (e.target === this) closeShareCard();
+        });
+
+        /* ══ 对话卡「分享金句」按钮注入 ════════════════════════
+           在 appendChatCard 调用后，对每张卡加一个小分享按钮  */
+        function addShareBtnToLastCard() {
+            const cards = document.querySelectorAll('.chat-card:not(.narrator-card):not(.echo-card):not(.choices-card):not([data-has-share])');
+            const card = cards[cards.length - 1];
+            if (!card) return;
+            card.dataset.hasShare = '1';
+            const agentName = card.querySelector('.agent-name');
+            const speaker = agentName ? agentName.textContent.replace(/[【】]/g,'').trim() : '';
+            const dialogueEl = card.querySelector('.agent-dialogue');
+            const quote = dialogueEl ? dialogueEl.textContent.slice(0, 80).trim() : '';
+            if (!quote) return;
+            const btn = document.createElement('button');
+            btn.textContent = '✦ 分享金句';
+            btn.style.cssText = 'float:right;margin-top:8px;background:transparent;border:none;color:#a07830;font-size:0.75em;cursor:pointer;letter-spacing:1px;font-family:serif;';
+            btn.onclick = () => openShareCard(quote, speaker, '');
+            card.appendChild(btn);
+        }
+
+    
+        /* ══════════════════════════════════════════════════════
+           Phase 7 · 感官沉浸
+           ① 环境氛围音效（Tone.js 合成，无外部资源依赖）
+           ② 历史人物 TTS 语音
+           ③ 场景图像生成（文生图+水墨风）
+           ══════════════════════════════════════════════════════ */
+
+        /* ── ① 氛围音效引擎（Tone.js 合成）─────────────────── */
+        let toneLoaded = false;
+        let ambientPlaying = false;
+        let ambientNodes = {};   // 当前活跃的 Tone 节点
+        let ambientVolume = 0.35;
+
+        function loadTone(cb) {
+            if (toneLoaded) { cb(); return; }
+            const s = document.createElement('script');
+            s.src = 'https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js';
+            s.onload = () => { toneLoaded = true; cb(); };
+            document.head.appendChild(s);
+        }
+
+        // Mood → 音效参数配置
+        const MOOD_SOUND = {
+            SERENE:    { label:'清风', type:'wind',   bpm:52,  filterFreq:800,  reverb:0.7, notes:['C4','E4','G4','A4'] },
+            MELANCHOLY:{ label:'愁雨', type:'rain',   bpm:44,  filterFreq:400,  reverb:0.9, notes:['D4','F4','Ab4','C5'] },
+            TENSE:     { label:'鼓声', type:'pulse',  bpm:90,  filterFreq:1200, reverb:0.2, notes:['C3','G3','Bb3','F3'] },
+            JOYFUL:    { label:'琴声', type:'pluck',  bpm:76,  filterFreq:2000, reverb:0.5, notes:['C5','E5','G5','B5'] },
+            SOLEMN:    { label:'钟鸣', type:'bell',   bpm:30,  filterFreq:600,  reverb:0.95,notes:['C3','G3','C4','G4'] },
+            CHAOTIC:   { label:'乱',  type:'chaos',  bpm:110, filterFreq:1800, reverb:0.4, notes:['C4','Db4','G4','Ab4'] },
+        };
+
+        function toggleAmbient() {
+            if (ambientPlaying) {
+                stopAmbient();
+            } else {
+                loadTone(() => startAmbient(currentMood || 'SERENE'));
+            }
+        }
+
+        function setAmbientVolume(v) {
+            ambientVolume = parseFloat(v);
+            if (ambientNodes.vol) ambientNodes.vol.volume.value = Tone.gainToDb(ambientVolume);
+        }
+
+        function startAmbient(mood) {
+            stopAmbient();
+            const cfg = MOOD_SOUND[mood] || MOOD_SOUND.SERENE;
+            document.getElementById('ambient-label').textContent = cfg.label;
+            document.getElementById('ambient-toggle').textContent = '🔊';
+            ambientPlaying = true;
+
+            // Master volume node
+            const vol = new Tone.Volume(Tone.gainToDb(ambientVolume)).toDestination();
+            const reverb = new Tone.Reverb({ decay: cfg.reverb * 6 + 1, wet: cfg.reverb }).connect(vol);
+            const filter = new Tone.Filter(cfg.filterFreq, 'lowpass').connect(reverb);
+
+            // Synth type by mood
+            let synth;
+            if (cfg.type === 'bell' || cfg.type === 'pluck') {
+                synth = new Tone.PluckSynth({ attackNoise: 0.4, dampening: 3000 }).connect(filter);
+            } else if (cfg.type === 'pulse') {
+                synth = new Tone.Synth({ oscillator: { type: 'pulse', width: 0.3 }, envelope: { attack:0.01, decay:0.2, sustain:0.1, release:0.5 } }).connect(filter);
+            } else {
+                synth = new Tone.AMSynth({ harmonicity: 1.5, envelope: { attack: 0.8, decay: 1, sustain: 0.6, release: 2 } }).connect(filter);
+            }
+
+            // Ambient pad (slow oscillating chord)
+            const pad = new Tone.PolySynth(Tone.Synth, {
+                oscillator: { type: 'sine' },
+                envelope: { attack: 2.5, decay: 1, sustain: 0.8, release: 3 },
+                volume: -18
+            }).connect(reverb);
+
+            // Pattern: cycle through notes slowly
+            let noteIdx = 0;
+            const loop = new Tone.Loop((time) => {
+                const note = cfg.notes[noteIdx % cfg.notes.length];
+                synth.triggerAttackRelease(note, '2n', time, 0.4);
+                noteIdx++;
+                // Every 4th note, strum pad chord
+                if (noteIdx % 4 === 0) {
+                    pad.triggerAttackRelease(cfg.notes, '1n', time, 0.2);
+                }
+            }, `${Math.round(60000 / cfg.bpm)}i`);
+
+            loop.start(0);
+            Tone.Transport.bpm.value = cfg.bpm;
+            Tone.Transport.start();
+
+            ambientNodes = { vol, reverb, filter, synth, pad, loop };
+        }
+
+        function stopAmbient() {
+            if (ambientNodes.loop) ambientNodes.loop.stop().dispose();
+            if (ambientNodes.synth) ambientNodes.synth.dispose();
+            if (ambientNodes.pad) ambientNodes.pad.dispose();
+            if (ambientNodes.filter) ambientNodes.filter.dispose();
+            if (ambientNodes.reverb) ambientNodes.reverb.dispose();
+            if (ambientNodes.vol) ambientNodes.vol.dispose();
+            ambientNodes = {};
+            Tone.Transport.stop();
+            ambientPlaying = false;
+            document.getElementById('ambient-toggle').textContent = '🔇';
+            document.getElementById('ambient-label').textContent = '静';
+        }
+
+        // Hook: when mood changes, smoothly transition ambient sound
+        const _origApplyMood = applyMood;
+        window.applyMood = function(mood) {
+            _origApplyMood(mood);
+            // Show ambient bar
+            document.getElementById('ambient-bar').classList.add('visible');
+            // If playing, restart with new mood
+            if (ambientPlaying) {
+                loadTone(() => startAmbient(mood));
+            }
+            // Update label even when not playing
+            const cfg = MOOD_SOUND[mood];
+            if (cfg && !ambientPlaying) {
+                document.getElementById('ambient-label').textContent = cfg.label;
+            }
+        };
+
+
+        /* ── ② 历史人物 TTS 语音 ─────────────────────────────── */
+        let currentAudio = null;
+        let currentTTSBtn = null;
+
+        async function speakDialogue(text, speaker, era, btnEl) {
+            // Stop any current playback
+            stopTTS();
+
+            if (currentTTSBtn) currentTTSBtn.classList.remove('playing');
+            currentTTSBtn = btnEl;
+            btnEl.textContent = '⏳';
+            btnEl.classList.add('playing');
+
+            // Determine voice type from speaker/role hints
+            let voiceType = '默认';
+            if (speaker.includes('娘') || speaker.includes('氏') || speaker.includes('夫人') || speaker.includes('妃')) voiceType = '女性';
+            else if (speaker.includes('公') || speaker.includes('侯') || speaker.includes('王') || speaker.includes('帝')) voiceType = '权贵';
+            else if (speaker.includes('童') || speaker.includes('小') || speaker.includes('生')) voiceType = '少年';
+            else if (speaker.includes('商') || speaker.includes('贩') || speaker.includes('匠')) voiceType = '市井';
+            else voiceType = '文人';
+
+            try {
+                const res = await fetch('/api/tts', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ text: text.slice(0, 200), speaker, era, voice_type: voiceType })
+                });
+                if (!res.ok) throw new Error('TTS failed');
+                const blob = await res.blob();
+                const url = URL.createObjectURL(blob);
+
+                currentAudio = new Audio(url);
+                currentAudio.volume = 0.85;
+
+                // Show player bar
+                const bar = document.getElementById('audio-player-bar');
+                document.getElementById('audio-speaker-name').textContent = speaker;
+                bar.classList.add('visible');
+
+                const prog = document.getElementById('audio-progress');
+                currentAudio.ontimeupdate = () => {
+                    if (currentAudio.duration) {
+                        prog.value = (currentAudio.currentTime / currentAudio.duration) * 100;
+                    }
+                };
+                currentAudio.onended = () => {
+                    stopTTS();
+                };
+
+                btnEl.textContent = '⏸';
+                currentAudio.play();
+            } catch(e) {
+                btnEl.textContent = '🔊';
+                btnEl.classList.remove('playing');
+                // Graceful degradation: show tooltip
+                btnEl.title = 'TTS 暂不可用（需配置 OpenAI API Key）';
+            }
+        }
+
+        function stopTTS() {
+            if (currentAudio) {
+                currentAudio.pause();
+                currentAudio = null;
+            }
+            if (currentTTSBtn) {
+                currentTTSBtn.textContent = '🔊';
+                currentTTSBtn.classList.remove('playing');
+                currentTTSBtn = null;
+            }
+            const bar = document.getElementById('audio-player-bar');
+            bar.classList.remove('visible');
+        }
+
+        function seekAudio(pct) {
+            if (currentAudio && currentAudio.duration) {
+                currentAudio.currentTime = (pct / 100) * currentAudio.duration;
+            }
+        }
+
+        // Patch appendChatCard to inject TTS button after agent-action
+        const _origAddShareBtn = addShareBtnToLastCard;
+        window.addShareBtnToLastCard = function() {
+            _origAddShareBtn();
+            injectTTSBtn();
+        };
+
+        function injectTTSBtn() {
+            const cards = document.querySelectorAll('.chat-card:not(.narrator-card):not(.echo-card):not(.choices-card):not([data-has-tts])');
+            const card = cards[cards.length - 1];
+            if (!card) return;
+            card.dataset.hasTts = '1';
+
+            const agentNameEl = card.querySelector('.agent-name');
+            const dialogueEl  = card.querySelector('.agent-dialogue');
+            if (!agentNameEl || !dialogueEl) return;
+
+            const speaker = agentNameEl.textContent.replace(/[【】]/g, '').trim();
+            const text = dialogueEl.textContent.slice(0, 200).trim();
+            if (!text) return;
+
+            const era = currentMood ? '' : '';  // era from session if available
+
+            const btn = document.createElement('button');
+            btn.className = 'tts-btn';
+            btn.textContent = '🔊';
+            btn.title = `朗读${speaker}的对白`;
+            btn.onclick = () => {
+                if (currentAudio && !currentAudio.paused) {
+                    stopTTS();
+                } else {
+                    speakDialogue(text, speaker, era, btn);
+                }
+            };
+            agentNameEl.appendChild(btn);
+        }
+
+
+        /* ── ③ 场景图像生成 ──────────────────────────────────── */
+        async function generateSceneImage() {
+            if (!currentSessionId) return;
+            const btn = document.getElementById('scene-gen-btn');
+            const img = document.getElementById('scene-img');
+            const panel = document.getElementById('scene-image-panel');
+
+            btn.disabled = true;
+            btn.textContent = '⏳ 水墨丹青中...';
+            panel.classList.add('visible');
+
+            try {
+                const res = await fetch('/api/scene_image', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ session_id: currentSessionId })
+                });
+                const d = await res.json();
+
+                if (d.status === 'success' && d.url) {
+                    img.src = d.url;
+                    img.style.display = 'block';
+                    document.getElementById('scene-img-caption').textContent = '水墨场景 · AI 绘';
+                } else {
+                    document.getElementById('scene-img-caption').textContent = '图像生成暂不可用（需配置图像 API）';
+                }
+            } catch(e) {
+                document.getElementById('scene-img-caption').textContent = '生成失败，请稍后重试';
+            } finally {
+                btn.disabled = false;
+                btn.textContent = '🎨 重新生成';
+            }
+        }
+
+        // Show scene panel when world starts
+        function showScenePanel() {
+            document.getElementById('scene-image-panel').classList.add('visible');
+        }
+
     </script>
+
+    <!-- 图谱 Tooltip -->
+    <div id="graph-tooltip"></div>
+
+    <!-- 知识图谱 Modal -->
+    <div id="graph-overlay">
+        <div class="modal-card" id="graph-modal">
+            <div class="modal-header">
+                <span class="modal-title">🕸 人 物 关 系 图 谱</span>
+                <button class="modal-close" onclick="closeGraph()">✕</button>
+            </div>
+            <div id="graph-svg-wrap">
+                <svg id="graph-svg"></svg>
+                <div id="graph-legend">
+                    ● 节点大小 = 人物重要性<br>
+                    — 连线粗细 = 亲密度  颜色 = 信任度
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 小测验 Modal -->
+    <div id="quiz-overlay">
+        <div class="modal-card" id="quiz-modal">
+            <div class="modal-header">
+                <span class="modal-title">📜 会 话 记 忆 测 验</span>
+                <button class="modal-close" onclick="closeQuiz()">✕</button>
+            </div>
+            <div class="quiz-body" id="quiz-body">
+                <div class="quiz-loading">典籍正在整理题目，稍候...</div>
+            </div>
+        </div>
+    </div>
+
+
+    <!-- Badge toast notification -->
+    <div id="badge-toast"></div>
+
+    <!-- 每日时空速递 Modal -->
+    <div id="digest-overlay">
+        <div id="digest-modal">
+            <div class="digest-header">
+                <span class="digest-title">📰 今 日 时 空 速 递</span>
+                <button class="modal-close" onclick="closeDigest()">✕</button>
+            </div>
+            <div class="digest-body" id="digest-body">
+                <div class="digest-loading">时空典籍编撰中，片刻...</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 金句分享卡 Modal -->
+    <div id="share-overlay">
+        <div id="share-modal">
+            <div class="modal-header">
+                <span class="modal-title">✦ 金 句 分 享 卡</span>
+                <button class="modal-close" onclick="closeShareCard()">✕</button>
+            </div>
+            <div id="share-canvas-wrap">
+                <canvas id="share-canvas" width="400" height="240"></canvas>
+            </div>
+            <div class="share-actions">
+                <button class="share-dl-btn" onclick="downloadShareCard()">⬇ 保存图片</button>
+                <button class="share-close-btn" onclick="closeShareCard()">关闭</button>
+            </div>
+        </div>
+    </div>
+
 </body>
 </html>
