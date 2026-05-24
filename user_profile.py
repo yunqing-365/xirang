@@ -72,6 +72,77 @@ class UserProfile:
     badges: List[str] = field(default_factory=list)  # 已解锁成就列表
     daily_digest_last: str = ""                   # 上次生成每日速递的日期
 
+    # ── 知识掌握度热力图 ──────────────────────────────────────
+    # {知识点key: {"score":0-100, "attempts":n, "last_seen":ts, "era":str, "label":str}}
+    knowledge_mastery: Dict[str, dict] = field(default_factory=dict)
+    # 小测验历史: [{session_id, questions_total, correct, era, timestamp}]
+    quiz_history: List[dict] = field(default_factory=list)
+
+    def update_knowledge(self, knowledge_key: str, correct: bool,
+                         era: str = "", label: str = ""):
+        """
+        更新知识点掌握度（遗忘曲线衰减 + 答对/错调整）。
+        score: 初始50，答对+15，答错-10，每天衰减3分（底线10）
+        """
+        import time as _t
+        now = _t.time()
+        kv = self.knowledge_mastery.get(knowledge_key)
+        if kv is None:
+            kv = {"score": 50, "attempts": 0, "last_seen": now,
+                  "era": era, "label": label or knowledge_key}
+            self.knowledge_mastery[knowledge_key] = kv
+        days = (now - kv["last_seen"]) / 86400
+        kv["score"] = max(10, kv["score"] - min(days * 3, kv["score"] - 10))
+        kv["score"] = max(0, min(100, kv["score"] + (15 if correct else -10)))
+        kv["attempts"] = kv.get("attempts", 0) + 1
+        kv["last_seen"] = now
+        if era and not kv.get("era"):
+            kv["era"] = era
+        if label and not kv.get("label"):
+            kv["label"] = label
+
+    def record_quiz(self, session_id: str, total: int,
+                    correct: int, era: str = ""):
+        """记录一次小测验结果"""
+        import time as _t
+        self.quiz_history.append({
+            "session_id": session_id,
+            "questions_total": total,
+            "correct": correct,
+            "score_pct": round(correct / total * 100) if total else 0,
+            "era": era,
+            "timestamp": _t.time(),
+        })
+        self.quiz_history = self.quiz_history[-50:]
+
+    def get_mastery_heatmap(self) -> dict:
+        """返回适合前端热力图渲染的结构化数据，按朝代分组。"""
+        import time as _t
+        now = _t.time()
+        by_era: Dict[str, list] = {}
+        for key, v in self.knowledge_mastery.items():
+            era = v.get("era", "未知")
+            days = (now - v.get("last_seen", now)) / 86400
+            live_score = max(10, v["score"] - min(days * 3, v["score"] - 10))
+            by_era.setdefault(era, []).append({
+                "key": key,
+                "label": v.get("label", key),
+                "score": round(live_score),
+                "attempts": v.get("attempts", 0),
+                "last_seen_days": round(days, 1),
+            })
+        for era in by_era:
+            by_era[era].sort(key=lambda x: -x["score"])
+        return {
+            "by_era": by_era,
+            "total_points": len(self.knowledge_mastery),
+            "avg_score": round(
+                sum(v["score"] for v in self.knowledge_mastery.values()) /
+                max(len(self.knowledge_mastery), 1)
+            ),
+            "quiz_count": len(self.quiz_history),
+        }
+
     # ── 统计 ──────────────────────────────────────────────────
     @property
     def exploration_depth(self) -> str:

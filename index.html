@@ -590,6 +590,253 @@
         #scene-gen-btn:hover { background: rgba(200,168,74,0.12); }
         #scene-gen-btn:disabled { opacity: 0.5; cursor: wait; }
 
+    
+        /* ══ 知识库管理面板 ═════════════════════════════════ */
+        #kb-overlay {
+            position:fixed; inset:0; z-index:660;
+            display:flex; align-items:center; justify-content:center;
+            background:rgba(10,6,2,0.72); backdrop-filter:blur(4px);
+            opacity:0; pointer-events:none; transition:opacity 0.35s ease;
+        }
+        #kb-overlay.open { opacity:1; pointer-events:all; }
+        #kb-modal {
+            background:linear-gradient(160deg,#fdf8ef,#f3e8d0);
+            border:1px solid #c8a84a; border-radius:8px;
+            width:min(92vw,680px); max-height:min(88vh,740px);
+            overflow-y:auto;
+            box-shadow:0 24px 80px rgba(0,0,0,0.3);
+            transform:translateY(24px) scale(0.97);
+            transition:transform 0.4s cubic-bezier(0.34,1.46,0.64,1);
+        }
+        #kb-overlay.open #kb-modal { transform:translateY(0) scale(1); }
+        .kb-body { padding:22px 28px 28px; }
+        .kb-section { margin-bottom:22px; }
+        .kb-section-title {
+            font-size:0.75em; letter-spacing:3px; color:#a07830;
+            border-bottom:1px solid rgba(200,168,74,0.35);
+            padding-bottom:6px; margin-bottom:12px;
+        }
+        .kb-upload-row {
+            display:flex; gap:8px; align-items:center; flex-wrap:wrap;
+        }
+        .kb-upload-row input[type=text], .kb-upload-row select {
+            padding:7px 12px; border:1px solid #d8c898; border-radius:4px;
+            font-family:'Noto Serif SC',serif; font-size:0.88em;
+            background:rgba(255,255,255,0.7); color:var(--text-ink);
+        }
+        .kb-file-input { display:none; }
+        .kb-upload-btn {
+            background:var(--accent-red); color:#FDF6E3; border:none;
+            padding:7px 16px; border-radius:4px; cursor:pointer;
+            font-family:'Noto Serif SC',serif; font-size:0.88em;
+            letter-spacing:1px; transition:filter 0.2s;
+        }
+        .kb-upload-btn:hover { filter:brightness(1.1); }
+        .kb-run-btn {
+            background:transparent; border:1px solid #4a5580;
+            color:#4a5580; padding:7px 16px; border-radius:4px;
+            cursor:pointer; font-family:'Noto Serif SC',serif;
+            font-size:0.88em; letter-spacing:1px; transition:all 0.2s;
+        }
+        .kb-run-btn:hover { background:rgba(74,85,128,0.08); }
+        .kb-status-grid {
+            display:grid; grid-template-columns:repeat(auto-fill,minmax(180px,1fr));
+            gap:8px;
+        }
+        .kb-era-card {
+            background:rgba(255,255,255,0.6); border:1px solid #d8c898;
+            border-radius:6px; padding:10px 12px;
+        }
+        .kb-era-name { font-size:0.88em; font-weight:600; color:#4a3000; margin-bottom:4px; }
+        .kb-era-stat { font-size:0.75em; color:#8a7050; line-height:1.6; }
+        .kb-file-list { font-size:0.78em; color:#6a5030; margin-top:3px; }
+        .kb-job-row {
+            display:flex; align-items:center; gap:8px; padding:6px 0;
+            border-bottom:1px dashed rgba(200,168,74,0.3); font-size:0.82em;
+        }
+        .kb-job-status {
+            padding:2px 8px; border-radius:10px; font-size:0.75em; font-weight:500;
+        }
+        .status-queued  { background:rgba(200,168,74,0.2); color:#8a6200; }
+        .status-running { background:rgba(42,110,63,0.15); color:#2a6e3f; animation:pulse 1.2s infinite; }
+        .status-done    { background:rgba(42,110,63,0.15); color:#2a6e3f; }
+        .status-error   { background:rgba(150,26,10,0.12); color:#961a0a; }
+        .kb-upload-feedback {
+            font-size:0.8em; color:#2a6e3f; margin-top:6px;
+            min-height:18px; font-style:italic;
+        }
+
+    
+        /* ══ Phase 9: 蝴蝶效应 & 历史触发器 ══════════════════ */
+        /* 时空快进横幅 */
+        .butterfly-banner {
+            background: linear-gradient(135deg, #1a1000 0%, #3a2400 100%);
+            border: 1px solid #c8a84a;
+            color: #f5e8c0;
+            text-align: center;
+            padding: 16px 24px;
+            border-radius: 6px;
+            font-size: 0.92em;
+            line-height: 1.8;
+            position: relative;
+            overflow: hidden;
+        }
+        .butterfly-banner::before {
+            content: "";
+            position: absolute; inset: 0;
+            background: repeating-linear-gradient(
+                45deg, transparent, transparent 10px,
+                rgba(200,168,74,0.04) 10px, rgba(200,168,74,0.04) 20px
+            );
+        }
+        .butterfly-banner .bf-title {
+            font-size: 0.78em; letter-spacing: 4px;
+            color: #c8a84a; margin-bottom: 8px;
+        }
+        .butterfly-banner .bf-body { position: relative; z-index: 1; }
+
+        /* 历史触发器旁白：比普通 narrator 更厚重 */
+        .trigger-narrator {
+            background: linear-gradient(135deg, #0d0800 0%, #2a1800 100%);
+            border: 1px solid rgba(200,168,74,0.5);
+            border-left: 3px solid #c8a84a;
+            color: #e8d8a0;
+            padding: 18px 24px;
+            border-radius: 4px;
+            font-size: 0.94em;
+            line-height: 1.95;
+            text-align: justify;
+            position: relative;
+        }
+        .trigger-narrator .tn-label {
+            font-size: 0.72em; letter-spacing: 3px;
+            color: #c8a84a; margin-bottom: 10px;
+            display: flex; align-items: center; gap: 8px;
+        }
+        .trigger-narrator .tn-label::before,
+        .trigger-narrator .tn-label::after {
+            content: ""; flex: 1; height: 0.5px;
+            background: rgba(200,168,74,0.4);
+        }
+
+        /* 触发器触发时的页面闪烁效果 */
+        @keyframes trigger-pulse {
+            0%   { box-shadow: 0 0 0 0 rgba(200,168,74,0.4); }
+            50%  { box-shadow: 0 0 30px 8px rgba(200,168,74,0.15); }
+            100% { box-shadow: 0 0 0 0 rgba(200,168,74,0); }
+        }
+        .trigger-narrator { animation: trigger-pulse 2s ease-out; }
+
+    
+        /* ══ Phase 10: 知识热力图 & 班级共探 ══════════════════ */
+        #heatmap-overlay, #classroom-overlay {
+            position:fixed; inset:0; z-index:670;
+            display:flex; align-items:center; justify-content:center;
+            background:rgba(10,6,2,0.72); backdrop-filter:blur(4px);
+            opacity:0; pointer-events:none; transition:opacity 0.35s ease;
+        }
+        #heatmap-overlay.open, #classroom-overlay.open {
+            opacity:1; pointer-events:all;
+        }
+        #heatmap-modal {
+            background:linear-gradient(160deg,#fdf8ef,#f3e8d0);
+            border:1px solid #c8a84a; border-radius:8px;
+            width:min(92vw,760px); max-height:min(88vh,680px); overflow-y:auto;
+            box-shadow:0 24px 80px rgba(0,0,0,0.3);
+            transform:translateY(24px) scale(0.97);
+            transition:transform 0.4s cubic-bezier(0.34,1.46,0.64,1);
+        }
+        #heatmap-overlay.open #heatmap-modal { transform:translateY(0) scale(1); }
+        .heatmap-body { padding:20px 28px 28px; }
+        .heatmap-summary {
+            display:flex; gap:16px; margin-bottom:18px; flex-wrap:wrap;
+        }
+        .hm-stat {
+            background:rgba(255,255,255,0.6); border:1px solid #d8c898;
+            border-radius:6px; padding:10px 16px; flex:1; min-width:100px;
+            text-align:center;
+        }
+        .hm-stat-num { font-size:1.6em; font-weight:700; color:var(--accent-red); }
+        .hm-stat-lbl { font-size:0.72em; color:#8a7050; margin-top:2px; }
+        .hm-era-section { margin-bottom:18px; }
+        .hm-era-title {
+            font-size:0.8em; letter-spacing:2px; color:#a07830;
+            margin-bottom:8px; display:flex; align-items:center; gap:6px;
+        }
+        .hm-era-title::after { content:''; flex:1; height:0.5px; background:rgba(200,168,74,0.4); }
+        .hm-grid {
+            display:grid; grid-template-columns:repeat(auto-fill,minmax(120px,1fr)); gap:6px;
+        }
+        .hm-cell {
+            border-radius:5px; padding:7px 10px;
+            font-size:0.78em; line-height:1.4; cursor:default;
+            transition:transform 0.15s;
+            border:1px solid transparent;
+        }
+        .hm-cell:hover { transform:scale(1.04); }
+        .hm-cell .hm-label { font-weight:500; color:#2c1800; margin-bottom:2px; }
+        .hm-cell .hm-score { font-size:0.85em; }
+        .hm-cell .hm-bar {
+            height:3px; border-radius:2px; margin-top:4px;
+            background:currentColor; opacity:0.5;
+        }
+        .hm-hint { font-size:0.82em; color:#a09070; font-style:italic; text-align:center; padding:20px; }
+
+        /* 班级共探 */
+        #classroom-modal {
+            background:linear-gradient(160deg,#fdf8ef,#f3e8d0);
+            border:1px solid #c8a84a; border-radius:8px;
+            width:min(92vw,640px); max-height:min(88vh,700px); overflow-y:auto;
+            box-shadow:0 24px 80px rgba(0,0,0,0.3);
+            transform:translateY(24px) scale(0.97);
+            transition:transform 0.4s cubic-bezier(0.34,1.46,0.64,1);
+        }
+        #classroom-overlay.open #classroom-modal { transform:translateY(0) scale(1); }
+        .cls-body { padding:20px 28px 28px; }
+        .cls-section { margin-bottom:18px; }
+        .cls-section-title {
+            font-size:0.75em; letter-spacing:3px; color:#a07830;
+            border-bottom:1px solid rgba(200,168,74,0.35);
+            padding-bottom:6px; margin-bottom:10px;
+        }
+        .cls-input-row { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+        .cls-input-row input {
+            flex:1; padding:7px 12px; border:1px solid #d8c898; border-radius:4px;
+            font-family:'Noto Serif SC',serif; font-size:0.88em;
+            background:rgba(255,255,255,0.7); color:var(--text-ink);
+        }
+        .cls-btn {
+            background:var(--accent-red); color:#FDF6E3; border:none;
+            padding:7px 16px; border-radius:4px; cursor:pointer;
+            font-family:'Noto Serif SC',serif; font-size:0.85em;
+            letter-spacing:1px; white-space:nowrap; transition:filter 0.2s;
+        }
+        .cls-btn:hover { filter:brightness(1.1); }
+        .cls-btn-sec {
+            background:transparent; border:1px solid #4a5580; color:#4a5580;
+            padding:7px 16px; border-radius:4px; cursor:pointer;
+            font-family:'Noto Serif SC',serif; font-size:0.85em;
+        }
+        .cls-member-list {
+            display:flex; flex-wrap:wrap; gap:5px; margin-top:6px;
+        }
+        .cls-member {
+            background:rgba(200,168,74,0.12); border:1px solid #d8c898;
+            border-radius:10px; padding:2px 10px; font-size:0.75em; color:#6a5030;
+        }
+        .cls-member.teacher { background:rgba(139,29,29,0.08); border-color:#e0a090; color:#8B1D1D; }
+        .cls-annotation-box {
+            background:rgba(20,10,0,0.9); border:1px solid #c8a84a;
+            border-radius:6px; padding:14px 18px; color:#f5e8c0;
+            font-size:0.9em; line-height:1.8; margin-top:8px; display:none;
+        }
+        .cls-annotation-box.visible { display:block; }
+        .cls-status { font-size:0.8em; color:#8a7050; font-style:italic; }
+        .cls-room-id {
+            background:#eee; padding:2px 8px; border-radius:3px;
+            font-family:monospace; font-size:0.85em; user-select:all;
+        }
+
     </style>
 </head>
 <body>
@@ -780,6 +1027,9 @@
             <button class="advance-btn" id="nextBtn" onclick="nextRound()">推进时空演化 (Advance)</button>
             <button class="advance-btn" id="graphBtn" onclick="openGraph()" style="background:transparent;border:1px solid var(--accent-red);color:var(--accent-red);padding:9px 18px;font-size:0.9em;letter-spacing:1px;">🕸 关系图谱</button>
             <button class="advance-btn" id="quizBtn" onclick="startQuiz()" style="background:transparent;border:1px solid #2C3E50;color:#2C3E50;padding:9px 18px;font-size:0.9em;letter-spacing:1px;">📜 记忆测验</button>
+            <button class="advance-btn" onclick="openKnowledgeAdmin()" style="background:transparent;border:1px solid #4a5580;color:#4a5580;padding:9px 18px;font-size:0.9em;letter-spacing:1px;">📚 史料库</button>
+            <button class="advance-btn" onclick="openHeatmap()" style="background:transparent;border:1px solid #2a6e3f;color:#2a6e3f;padding:9px 18px;font-size:0.9em;letter-spacing:1px;">🗺 知识图</button>
+            <button class="advance-btn" onclick="openClassroom()" style="background:transparent;border:1px solid #c8a84a;color:#8a6200;padding:9px 18px;font-size:0.9em;letter-spacing:1px;">🏫 共探</button>
         </div>
     </div>
 
@@ -1291,8 +1541,25 @@
         }
 
         function appendNarrator(content) {
-            document.getElementById('chat-stream').insertAdjacentHTML('beforeend',
-                `<div class="chat-card narrator-card"><span>🎬 ${content}</span></div>`);
+            const stream = document.getElementById('chat-stream');
+            // 历史触发器格式检测（以【历史回响】【历史现场】【政治背景】等开头）
+            const isTrigger = /^【(历史|政治|文化|航海|节气|制度|战|节日)/.test(content);
+            if (isTrigger) {
+                stream.insertAdjacentHTML('beforeend', `
+                    <div class="chat-card trigger-narrator">
+                        <div class="tn-label">✦ 历 史 回 响 ✦</div>
+                        <div>${content}</div>
+                    </div>`);
+            } else if (content.includes('时空快进') || content.includes('离开') && content.includes('小时')) {
+                stream.insertAdjacentHTML('beforeend', `
+                    <div class="chat-card butterfly-banner">
+                        <div class="bf-title">⟳ 时 空 快 进</div>
+                        <div class="bf-body">${content}</div>
+                    </div>`);
+            } else {
+                stream.insertAdjacentHTML('beforeend',
+                    `<div class="chat-card narrator-card"><span>🎬 ${content}</span></div>`);
+            }
             scrollToBottom();
         }
 
@@ -1563,7 +1830,7 @@
             quizAnswered++;
             // All answered → show total score
             if (quizAnswered >= quizQuestions.length) {
-                setTimeout(() => {
+                setTimeout(async () => {
                     const scoreEl = document.getElementById('quiz-score');
                     if (scoreEl) scoreEl.style.display = 'block';
                     document.getElementById('score-display').textContent =
@@ -1575,6 +1842,8 @@
                         : '时空太过久远，再来一局吧';
                     document.getElementById('score-comment').textContent = comments;
                     scoreEl.scrollIntoView({behavior:'smooth'});
+                    // 自动提交到知识掌握度系统
+                    await submitQuizToKnowledge();
                 }, 400);
             }
         }
@@ -2147,6 +2416,379 @@
             document.getElementById('scene-image-panel').classList.add('visible');
         }
 
+    
+        /* ══ 知识库管理面板 JS ════════════════════════════════ */
+        let kbJobPoller = null;
+
+        async function openKnowledgeAdmin() {
+            document.getElementById('kb-overlay').classList.add('open');
+            await refreshKBStatus();
+        }
+
+        function closeKnowledgeAdmin() {
+            document.getElementById('kb-overlay').classList.remove('open');
+            if (kbJobPoller) { clearInterval(kbJobPoller); kbJobPoller = null; }
+        }
+        document.getElementById('kb-overlay').addEventListener('click', function(e) {
+            if (e.target === this) closeKnowledgeAdmin();
+        });
+
+        // 上传文档
+        async function uploadKBFiles(input) {
+            const files = Array.from(input.files);
+            if (!files.length) return;
+
+            const era = document.getElementById('kb-custom-era').value.trim()
+                     || document.getElementById('kb-era-select').value;
+            const feedback = document.getElementById('kb-upload-feedback');
+            feedback.textContent = `⏳ 上传 ${files.length} 个文件...`;
+
+            let successCount = 0;
+            for (const file of files) {
+                const fd = new FormData();
+                fd.append('file', file);
+                fd.append('era', era);
+                try {
+                    const res = await fetch('/api/ingest/upload', { method:'POST', body: fd });
+                    const d = await res.json();
+                    if (d.status === 'uploaded') {
+                        successCount++;
+                    } else {
+                        console.error('Upload failed:', d);
+                    }
+                } catch(e) {
+                    feedback.textContent = `❌ 上传失败: ${e.message}`;
+                    return;
+                }
+            }
+            feedback.textContent = `✅ 成功上传 ${successCount}/${files.length} 个文件到 [${era}]`;
+            input.value = '';
+            await refreshKBStatus();
+        }
+
+        // 触发摄入流水线
+        async function triggerIngestion() {
+            const era = document.getElementById('kb-ingest-era').value;
+            const skipGraph = document.getElementById('kb-skip-graph').checked;
+            const skipIndex = document.getElementById('kb-skip-index').checked;
+
+            try {
+                const params = new URLSearchParams({ era, skip_graph: skipGraph, skip_index: skipIndex });
+                const res = await fetch('/api/ingest/run?' + params, { method: 'POST' });
+                const job = await res.json();
+                renderJob(job);
+                pollJob(job.job_id);
+            } catch(e) {
+                alert('摄入启动失败：' + e.message);
+            }
+        }
+
+        function renderJob(job) {
+            const container = document.getElementById('kb-jobs');
+            const existing = document.getElementById('job-' + job.job_id);
+            if (existing) {
+                existing.querySelector('.kb-job-status').className = `kb-job-status status-${job.status}`;
+                existing.querySelector('.kb-job-status').textContent = {
+                    queued:'排队中', running:'处理中', done:'完成', error:'出错'
+                }[job.status] || job.status;
+                if (job.summary) {
+                    existing.querySelector('.kb-job-detail').textContent =
+                        `${job.summary.chunks_parsed}块 | 实体${job.summary.graph?.entities||0}`;
+                }
+                if (job.error) {
+                    existing.querySelector('.kb-job-detail').textContent = '⚠ ' + job.error.slice(0,60);
+                }
+                return;
+            }
+            const statusLabels = { queued:'排队中', running:'处理中', done:'完成', error:'出错' };
+            const row = document.createElement('div');
+            row.id = 'job-' + job.job_id;
+            row.className = 'kb-job-row';
+            row.innerHTML = `
+                <span style="color:#8a7050;font-family:monospace;">${job.job_id}</span>
+                <span style="flex:1;color:#4a3000;">[${job.era}]</span>
+                <span class="kb-job-status status-${job.status}">${statusLabels[job.status]||job.status}</span>
+                <span class="kb-job-detail" style="font-size:0.78em;color:#a09070;"></span>
+            `;
+            container.prepend(row);
+        }
+
+        async function pollJob(jobId) {
+            if (kbJobPoller) clearInterval(kbJobPoller);
+            kbJobPoller = setInterval(async () => {
+                try {
+                    const res = await fetch('/api/ingest/status/' + jobId);
+                    const job = await res.json();
+                    renderJob(job);
+                    if (job.status === 'done' || job.status === 'error') {
+                        clearInterval(kbJobPoller);
+                        kbJobPoller = null;
+                        await refreshKBStatus();
+                    }
+                } catch(e) {
+                    clearInterval(kbJobPoller);
+                }
+            }, 2500);
+        }
+
+        // 刷新知识库状态
+        async function refreshKBStatus() {
+            const container = document.getElementById('kb-status-content');
+            try {
+                const res = await fetch('/api/ingest/status');
+                const d = await res.json();
+
+                // 总体统计
+                let html = `<div style="font-size:0.82em;color:#6a5030;margin-bottom:10px;">
+                    累计 <b>${d.total_chunks}</b> 文本块 ·
+                    <b>${d.total_entities}</b> 图谱实体 ·
+                    <b>${d.processed_files}</b> 已处理文件
+                    ${d.last_run ? `· 最后运行: ${d.last_run.slice(0,16)}` : ''}
+                </div>`;
+
+                // 各朝代图谱卡片
+                if (d.graphs && d.graphs.length > 0) {
+                    html += `<div class="kb-status-grid">`;
+                    // 合并 raw_docs 信息
+                    const rawMap = {};
+                    (d.raw_documents || []).forEach(r => { rawMap[r.era] = r; });
+                    d.graphs.forEach(g => {
+                        const raw = rawMap[g.era] || {};
+                        html += `<div class="kb-era-card">
+                            <div class="kb-era-name">${g.era}</div>
+                            <div class="kb-era-stat">
+                                🕸 ${g.entities} 实体 / ${g.relations} 关系<br>
+                                📄 ${raw.file_count || 0} 原始文档
+                            </div>
+                            ${raw.files ? `<div class="kb-file-list">${raw.files.slice(0,3).join('<br>')}</div>` : ''}
+                        </div>`;
+                    });
+                    // 有 raw docs 但还没有图谱的朝代
+                    (d.raw_documents || []).forEach(r => {
+                        if (!d.graphs.find(g => g.era === r.era)) {
+                            html += `<div class="kb-era-card" style="border-style:dashed;">
+                                <div class="kb-era-name">${r.era} <span style="color:#c8a84a;font-size:0.8em;">未摄入</span></div>
+                                <div class="kb-era-stat">📄 ${r.file_count} 原始文档</div>
+                            </div>`;
+                        }
+                    });
+                    html += `</div>`;
+                } else {
+                    html += `<div style="font-size:0.82em;color:#a09070;font-style:italic;">
+                        暂无摄入数据，请上传史料文档后点击「开始摄入」。
+                    </div>`;
+                }
+                container.innerHTML = html;
+            } catch(e) {
+                container.innerHTML = `<div style="color:#961a0a;font-size:0.82em;">⚠ 无法连接后端：${e.message}</div>`;
+            }
+        }
+
+    
+        /* ══ Phase 10: 知识热力图 ════════════════════════════ */
+        // 小测验完成后自动提交知识掌握度
+        let _lastQuizAnswers = [];   // 记录答题详情用于提交
+        const _origAnswerQuiz = answerQuiz;
+        window.answerQuiz = function(qi, chosen) {
+            _origAnswerQuiz(qi, chosen);
+            const q = quizQuestions[qi];
+            if (q) {
+                _lastQuizAnswers.push({
+                    question_key: q.q ? q.q.slice(0,20) : `q${qi}`,
+                    question_label: q.q || `题目${qi+1}`,
+                    correct: chosen === q.answer,
+                });
+            }
+        };
+
+        async function submitQuizToKnowledge() {
+            if (!_lastQuizAnswers.length) return;
+            try {
+                await fetch('/api/knowledge/quiz_result', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        user_id: currentUserId,
+                        session_id: currentSessionId,
+                        era: currentMood ? '' : '',  // era from session if needed
+                        answers: _lastQuizAnswers,
+                    }),
+                });
+                _lastQuizAnswers = [];
+            } catch(e) { console.warn('知识提交失败:', e); }
+        }
+
+        // 热力图面板
+        async function openHeatmap() {
+            document.getElementById('heatmap-overlay').classList.add('open');
+            await refreshHeatmap();
+        }
+
+        function closeHeatmap() {
+            document.getElementById('heatmap-overlay').classList.remove('open');
+        }
+        document.getElementById('heatmap-overlay').addEventListener('click', function(e) {
+            if (e.target === this) closeHeatmap();
+        });
+
+        async function refreshHeatmap() {
+            const body = document.getElementById('heatmap-body');
+            try {
+                const res = await fetch(`/api/knowledge/heatmap/${currentUserId}`);
+                const d = await res.json();
+                renderHeatmap(d);
+            } catch(e) {
+                body.innerHTML = '<div class="hm-hint">⚠ 无法加载数据</div>';
+            }
+        }
+
+        function renderHeatmap(d) {
+            const body = document.getElementById('heatmap-body');
+            if (!d.total_points) {
+                body.innerHTML = `<div class="hm-hint">${d.hint || '完成小测验后，知识图将在此呈现。'}</div>`;
+                return;
+            }
+
+            // 总体统计
+            let html = `<div class="heatmap-summary">
+                <div class="hm-stat"><div class="hm-stat-num">${d.total_points}</div><div class="hm-stat-lbl">知识点</div></div>
+                <div class="hm-stat"><div class="hm-stat-num">${d.avg_score}</div><div class="hm-stat-lbl">平均掌握度</div></div>
+                <div class="hm-stat"><div class="hm-stat-num">${d.quiz_count}</div><div class="hm-stat-lbl">测验次数</div></div>
+            </div>`;
+
+            // 按朝代分组渲染色块
+            for (const [era, items] of Object.entries(d.by_era || {})) {
+                html += `<div class="hm-era-section">
+                    <div class="hm-era-title">📜 ${era}</div>
+                    <div class="hm-grid">`;
+                for (const item of items) {
+                    const s = item.score;
+                    // 颜色：红(0)→橙(40)→黄(60)→绿(80)→深绿(100)
+                    const hue = Math.round(s * 1.2);  // 0→0(红) 100→120(绿)
+                    const bg = `hsla(${hue}, 60%, ${90 - s * 0.3}%, 0.9)`;
+                    const barW = s + '%';
+                    html += `<div class="hm-cell" style="background:${bg};" title="${item.label} · 掌握度${s} · 练习${item.attempts}次">
+                        <div class="hm-label">${item.label.slice(0, 8)}</div>
+                        <div class="hm-score" style="color:hsl(${hue},50%,35%)">${s}分</div>
+                        <div class="hm-bar" style="width:${barW};color:hsl(${hue},60%,40%);"></div>
+                    </div>`;
+                }
+                html += `</div></div>`;
+            }
+            body.innerHTML = html;
+        }
+
+
+        /* ══ Phase 10: 班级共探 ══════════════════════════════ */
+        let _currentRoomId = null;
+        let _roomRole = null;
+        let _classroomSSE = null;
+        let _classBroadcastSince = 0;
+
+        async function openClassroom() {
+            document.getElementById('classroom-overlay').classList.add('open');
+        }
+        function closeClassroom() {
+            document.getElementById('classroom-overlay').classList.remove('open');
+        }
+        document.getElementById('classroom-overlay').addEventListener('click', function(e) {
+            if (e.target === this) closeClassroom();
+        });
+
+        async function createClassroom() {
+            if (!currentSessionId) { alert('请先进入一个时空会话'); return; }
+            const teacherId = document.getElementById('cls-teacher-id').value.trim() || currentUserId;
+            const roomName  = document.getElementById('cls-room-name').value.trim();
+            try {
+                const res = await fetch('/api/classroom/create', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ teacher_id: teacherId, session_id: currentSessionId, room_name: roomName }),
+                });
+                const room = await res.json();
+                document.getElementById('cls-create-result').innerHTML =
+                    `✅ 课堂已创建！房间号：<span class="cls-room-id">${room.room_id}</span>（发给学生）`;
+                _enterRoom(room.room_id, teacherId, 'teacher');
+            } catch(e) { alert('创建失败: ' + e.message); }
+        }
+
+        async function joinClassroom() {
+            const roomId   = document.getElementById('cls-room-id-input').value.trim();
+            const userId   = document.getElementById('cls-student-id').value.trim() || currentUserId;
+            if (!roomId) { alert('请输入房间号'); return; }
+            try {
+                const res = await fetch('/api/classroom/join', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ room_id: roomId, user_id: userId, role: 'student' }),
+                });
+                const d = await res.json();
+                document.getElementById('cls-join-result').textContent =
+                    `✅ 已加入课堂，成员 ${d.member_count} 人`;
+                _enterRoom(roomId, userId, 'student');
+            } catch(e) { alert('加入失败: ' + e.message); }
+        }
+
+        function _enterRoom(roomId, userId, role) {
+            _currentRoomId = roomId;
+            _roomRole = role;
+            // Show room panel
+            document.getElementById('cls-room-panel').style.display = '';
+            document.getElementById('cls-room-id-display').textContent = roomId;
+            if (role === 'teacher') {
+                document.getElementById('cls-teacher-controls').style.display = '';
+            }
+            // Start SSE listener
+            if (_classroomSSE) _classroomSSE.close();
+            _classBroadcastSince = 0;
+            _subscribeClassroom(roomId);
+        }
+
+        function _subscribeClassroom(roomId) {
+            const url = `/api/classroom/stream/${roomId}?user_id=${currentUserId}&since=${_classBroadcastSince}`;
+            _classroomSSE = new EventSource(url);
+            _classroomSSE.onmessage = (e) => {
+                const d = JSON.parse(e.data);
+                if (d.type === 'heartbeat') {
+                    document.getElementById('cls-member-count').textContent = d.members;
+                    return;
+                }
+                if (d.type === 'teacher_annotation') {
+                    _classBroadcastSince++;
+                    const box = document.getElementById('cls-annotation-display');
+                    box.textContent = d.content;
+                    box.classList.toggle('visible', !!d.content);
+                    // Also push into main narrative stream
+                    if (d.content) {
+                        appendNarrator(`【教师讲解】${d.content}`);
+                    }
+                }
+            };
+            _classroomSSE.onerror = () => {
+                // Auto-reconnect after 3s
+                setTimeout(() => { if (_currentRoomId) _subscribeClassroom(_currentRoomId); }, 3000);
+            };
+        }
+
+        async function teacherAnnotate(pause) {
+            if (!_currentRoomId) return;
+            const annotation = document.getElementById('cls-annotation-input').value.trim();
+            const teacherId  = document.getElementById('cls-teacher-id').value.trim() || currentUserId;
+            try {
+                await fetch('/api/classroom/annotate', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        room_id: _currentRoomId,
+                        teacher_id: teacherId,
+                        annotation: annotation,
+                        paused: pause,
+                    }),
+                });
+                if (!pause) {
+                    document.getElementById('cls-annotation-input').value = '';
+                    document.getElementById('cls-annotation-display').classList.remove('visible');
+                }
+            } catch(e) { console.warn('注释发布失败:', e); }
+        }
+
     </script>
 
     <!-- 图谱 Tooltip -->
@@ -2212,6 +2854,146 @@
             <div class="share-actions">
                 <button class="share-dl-btn" onclick="downloadShareCard()">⬇ 保存图片</button>
                 <button class="share-close-btn" onclick="closeShareCard()">关闭</button>
+            </div>
+        </div>
+    </div>
+
+
+    <!-- 知识库管理 Modal -->
+    <div id="kb-overlay">
+        <div id="kb-modal">
+            <div class="modal-header">
+                <span class="modal-title">📚 史 料 知 识 库 管 理</span>
+                <button class="modal-close" onclick="closeKnowledgeAdmin()">✕</button>
+            </div>
+            <div class="kb-body">
+
+                <!-- 上传文档 -->
+                <div class="kb-section">
+                    <div class="kb-section-title">上 传 史 料 文 档</div>
+                    <div class="kb-upload-row">
+                        <select id="kb-era-select" style="min-width:120px;">
+                            <option value="song">北宋/南宋</option>
+                            <option value="tang">唐朝</option>
+                            <option value="ming">明朝</option>
+                            <option value="qing">清朝</option>
+                            <option value="han">汉朝</option>
+                            <option value="yuan">元朝</option>
+                            <option value="pre_qin">先秦</option>
+                        </select>
+                        <input type="text" id="kb-custom-era" placeholder="或自定义朝代..." style="width:140px;">
+                        <button class="kb-upload-btn" onclick="document.getElementById('kb-file-input').click()">
+                            选择文件
+                        </button>
+                        <input type="file" id="kb-file-input" class="kb-file-input" 
+                               accept=".txt,.md,.pdf" multiple onchange="uploadKBFiles(this)">
+                    </div>
+                    <div class="kb-upload-feedback" id="kb-upload-feedback"></div>
+                    <div style="font-size:0.75em;color:#a09070;margin-top:4px;">
+                        支持 .txt / .md / .pdf（繁体、竖排、异体字自动处理）
+                    </div>
+                </div>
+
+                <!-- 触发摄入 -->
+                <div class="kb-section">
+                    <div class="kb-section-title">触 发 摄 入 流 水 线</div>
+                    <div class="kb-upload-row">
+                        <select id="kb-ingest-era" style="min-width:120px;">
+                            <option value="song">北宋/南宋</option>
+                            <option value="tang">唐朝</option>
+                            <option value="ming">明朝</option>
+                            <option value="qing">清朝</option>
+                            <option value="han">汉朝</option>
+                        </select>
+                        <label style="font-size:0.82em;color:#6a5030;display:flex;align-items:center;gap:4px;">
+                            <input type="checkbox" id="kb-skip-graph"> 跳过图谱抽取
+                        </label>
+                        <label style="font-size:0.82em;color:#6a5030;display:flex;align-items:center;gap:4px;">
+                            <input type="checkbox" id="kb-skip-index"> 跳过向量索引
+                        </label>
+                        <button class="kb-run-btn" onclick="triggerIngestion()">▶ 开始摄入</button>
+                    </div>
+                    <div id="kb-jobs" style="margin-top:12px;"></div>
+                </div>
+
+                <!-- 知识库状态 -->
+                <div class="kb-section">
+                    <div class="kb-section-title" style="display:flex;justify-content:space-between;">
+                        <span>知 识 库 状 态</span>
+                        <button onclick="refreshKBStatus()" style="background:none;border:none;color:#a07830;cursor:pointer;font-size:0.82em;">↻ 刷新</button>
+                    </div>
+                    <div id="kb-status-content">
+                        <div style="color:#a09070;font-size:0.82em;font-style:italic;">加载中...</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+
+    <!-- 知识热力图 Modal -->
+    <div id="heatmap-overlay">
+        <div id="heatmap-modal">
+            <div class="modal-header">
+                <span class="modal-title">🗺 知 识 掌 握 度 热 力 图</span>
+                <button class="modal-close" onclick="closeHeatmap()">✕</button>
+            </div>
+            <div class="heatmap-body" id="heatmap-body">
+                <div class="hm-hint">加载中...</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 班级共探 Modal -->
+    <div id="classroom-overlay">
+        <div id="classroom-modal">
+            <div class="modal-header">
+                <span class="modal-title">🏫 班 级 共 探 模 式</span>
+                <button class="modal-close" onclick="closeClassroom()">✕</button>
+            </div>
+            <div class="cls-body">
+                <!-- 创建房间 -->
+                <div class="cls-section">
+                    <div class="cls-section-title">创 建 课 堂（教师）</div>
+                    <div class="cls-input-row">
+                        <input type="text" id="cls-teacher-id" placeholder="教师ID（你的用户名）">
+                        <input type="text" id="cls-room-name" placeholder="课堂名称（选填）">
+                        <button class="cls-btn" onclick="createClassroom()">创建课堂</button>
+                    </div>
+                    <div id="cls-create-result" style="margin-top:8px;font-size:0.82em;color:#2a6e3f;"></div>
+                </div>
+
+                <!-- 加入房间 -->
+                <div class="cls-section">
+                    <div class="cls-section-title">加 入 课 堂（学生）</div>
+                    <div class="cls-input-row">
+                        <input type="text" id="cls-room-id-input" placeholder="输入房间号（如 room_a1b2c3）">
+                        <input type="text" id="cls-student-id" placeholder="你的用户名">
+                        <button class="cls-btn" onclick="joinClassroom()">加入</button>
+                    </div>
+                    <div id="cls-join-result" style="margin-top:8px;font-size:0.82em;color:#2a6e3f;"></div>
+                </div>
+
+                <!-- 当前房间状态 -->
+                <div class="cls-section" id="cls-room-panel" style="display:none;">
+                    <div class="cls-section-title">当 前 课 堂</div>
+                    <div class="cls-status">
+                        房间号：<span class="cls-room-id" id="cls-room-id-display">—</span>
+                        · 成员：<span id="cls-member-count">0</span> 人
+                    </div>
+                    <div class="cls-member-list" id="cls-member-list"></div>
+                    <!-- 教师控制 -->
+                    <div id="cls-teacher-controls" style="margin-top:12px;display:none;">
+                        <div class="cls-input-row">
+                            <input type="text" id="cls-annotation-input"
+                                   placeholder="输入历史讲解注释，点「暂停发布」推送给所有学生...">
+                            <button class="cls-btn" onclick="teacherAnnotate(true)">⏸ 暂停发布</button>
+                            <button class="cls-btn-sec" onclick="teacherAnnotate(false)">▶ 恢复</button>
+                        </div>
+                    </div>
+                    <!-- 教师注释显示 -->
+                    <div class="cls-annotation-box" id="cls-annotation-display"></div>
+                </div>
             </div>
         </div>
     </div>
