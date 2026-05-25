@@ -1,0 +1,14 @@
+# deploy/grafana/dashboards/dashboards.yml
+# Grafana 看板自动加载配置
+apiVersion: 1
+
+providers:
+  - name: xirang
+    orgId: 1
+    folder: 息壤监控
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 30
+    allowUiUpdates: true
+    options:
+      path: /etc/grafana/provisioning/dashboards

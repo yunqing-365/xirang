@@ -1,0 +1,63 @@
+{
+  "title": "息壤运行总览",
+  "uid": "xirang-overview",
+  "schemaVersion": 36,
+  "version": 1,
+  "refresh": "15s",
+  "time": { "from": "now-1h", "to": "now" },
+  "panels": [
+    {
+      "id": 1, "gridPos": {"x":0,"y":0,"w":4,"h":4},
+      "type": "stat", "title": "活跃会话",
+      "targets": [{"expr": "xirang_active_sessions", "legendFormat": "会话数"}],
+      "options": {"reduceOptions": {"calcs": ["lastNotNull"]}, "colorMode": "background"}
+    },
+    {
+      "id": 2, "gridPos": {"x":4,"y":0,"w":4,"h":4},
+      "type": "stat", "title": "每分钟请求数",
+      "targets": [{"expr": "rate(xirang_requests_total[1m])*60", "legendFormat": "RPM"}]
+    },
+    {
+      "id": 3, "gridPos": {"x":8,"y":0,"w":4,"h":4},
+      "type": "stat", "title": "LLM 调用成功率",
+      "targets": [{"expr": "rate(xirang_llm_calls_total{status='ok'}[5m]) / rate(xirang_llm_calls_total[5m]) * 100", "legendFormat": "%"}]
+    },
+    {
+      "id": 4, "gridPos": {"x":12,"y":0,"w":4,"h":4},
+      "type": "stat", "title": "历史触发器今日",
+      "targets": [{"expr": "increase(xirang_trigger_fires_total[24h])", "legendFormat": "次"}]
+    },
+    {
+      "id": 5, "gridPos": {"x":0,"y":4,"w":12,"h":8},
+      "type": "timeseries", "title": "请求耗时 P50/P95/P99",
+      "targets": [
+        {"expr": "histogram_quantile(0.50, rate(xirang_request_duration_seconds_bucket[5m]))", "legendFormat": "P50"},
+        {"expr": "histogram_quantile(0.95, rate(xirang_request_duration_seconds_bucket[5m]))", "legendFormat": "P95"},
+        {"expr": "histogram_quantile(0.99, rate(xirang_request_duration_seconds_bucket[5m]))", "legendFormat": "P99"}
+      ]
+    },
+    {
+      "id": 6, "gridPos": {"x":12,"y":4,"w":12,"h":8},
+      "type": "timeseries", "title": "LLM 响应耗时",
+      "targets": [
+        {"expr": "histogram_quantile(0.50, rate(xirang_llm_duration_seconds_bucket[5m]))", "legendFormat": "P50"},
+        {"expr": "histogram_quantile(0.95, rate(xirang_llm_duration_seconds_bucket[5m]))", "legendFormat": "P95"}
+      ]
+    },
+    {
+      "id": 7, "gridPos": {"x":0,"y":12,"w":8,"h":8},
+      "type": "piechart", "title": "叙事事件分布",
+      "targets": [{"expr": "sum by(event_type) (increase(xirang_narrative_events_total[1h]))", "legendFormat": "{{event_type}}"}]
+    },
+    {
+      "id": 8, "gridPos": {"x":8,"y":12,"w":8,"h":8},
+      "type": "bargauge", "title": "触发器热度 TOP10",
+      "targets": [{"expr": "topk(10, sum by(trigger_id) (increase(xirang_trigger_fires_total[7d])))", "legendFormat": "{{trigger_id}}"}]
+    },
+    {
+      "id": 9, "gridPos": {"x":16,"y":12,"w":8,"h":8},
+      "type": "timeseries", "title": "离线推演频率",
+      "targets": [{"expr": "rate(xirang_offline_evolutions_total[1h])*3600", "legendFormat": "次/小时"}]
+    }
+  ]
+}

@@ -1,0 +1,52 @@
+# 息壤 Python 依赖清单
+# 生成方式：pip freeze > requirements.txt（已过滤无关包）
+# 安装：pip install -r requirements.txt
+
+# ── Web 框架 ─────────────────────────────────────────────────
+fastapi==0.115.0
+uvicorn[standard]==0.30.0
+gunicorn==22.0.0
+starlette==0.41.0
+python-multipart==0.0.12    # 文件上传
+aiofiles==24.1.0
+
+# ── LLM & AI ────────────────────────────────────────────────
+openai==1.40.0
+httpx==0.27.0
+
+# ── 向量数据库 ────────────────────────────────────────────────
+chromadb==0.5.0
+sentence-transformers==3.0.0
+
+# ── 文档处理 ─────────────────────────────────────────────────
+pdfplumber==0.11.9
+pypdf==5.0.0
+pytesseract==0.3.13
+Pillow==10.4.0
+opencc-python-reimplemented==0.1.7   # 繁简转换
+
+# ── 数据库 & 缓存 ─────────────────────────────────────────────
+redis==5.0.8
+asyncpg==0.29.0                      # PostgreSQL 异步驱动
+alembic==1.13.0                      # 数据库迁移
+SQLAlchemy==2.0.30
+
+# ── 鉴权 ─────────────────────────────────────────────────────
+python-jose[cryptography]==3.3.0
+passlib[bcrypt]==1.7.4
+
+# ── 可观测性 ─────────────────────────────────────────────────
+prometheus-client==0.21.0
+structlog==24.4.0
+
+# ── 数据处理 ─────────────────────────────────────────────────
+pydantic==2.8.0
+pydantic-settings==2.4.0
+python-dotenv==1.0.1
+
+# ── 图谱（现有 tools/ 依赖）─────────────────────────────────
+networkx==3.3
+
+# ── 异步任务（可选，Celery 批量 TTS/摄入）───────────────────
+# celery[redis]==5.4.0
+# flower==2.0.1    # Celery 监控面板

@@ -1,4 +1,52 @@
+# 息壤 .gitignore
+
+# ── 敏感配置（绝不提交）────────────────────────────────────
 .env
-config.py
-poc.py
+*.key
+*.pem
+deploy/certs/
+
+# ── Python ──────────────────────────────────────────────────
 __pycache__/
+*.py[cod]
+*.so
+.venv/
+venv/
+env/
+*.egg-info/
+dist/
+build/
+
+# ── 运行时数据（通过 Volume 持久化，不进 git）──────────────
+data/chroma_db/
+data/scenarios/
+data/raw_documents/
+data/knowledge/
+data/ingestion_status.json
+backups/
+
+# ── 数据库 & 缓存 ───────────────────────────────────────────
+*.sqlite3
+*.sqlite
+
+# ── 测试 & 覆盖率 ───────────────────────────────────────────
+.pytest_cache/
+.coverage
+htmlcov/
+.mypy_cache/
+.ruff_cache/
+
+# ── IDE ─────────────────────────────────────────────────────
+.idea/
+.vscode/
+*.swp
+.DS_Store
+
+# ── 日志 ────────────────────────────────────────────────────
+*.log
+logs/
+
+# ── 临时文件 ────────────────────────────────────────────────
+*.tmp
+*.bak
+*.orig

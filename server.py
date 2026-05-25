@@ -32,6 +32,12 @@ from narrative.offline_evolution import (
     should_fast_forward, fast_forward, get_offline_log,
     format_butterfly_sse, MAX_OFFLINE_ROUNDS,
 )
+from infra.auth import auth_router, get_current_user, rate_limit_dep
+from infra.observability import (
+    setup_observability, metrics_router,
+    record_narrative_event, record_trigger_fire,
+    record_offline_evolution, update_active_sessions,
+)
 from reflection_engine import ReflectionEngine
 from scenario_manager import ScenarioManager
 from session_manager import session_mgr
@@ -69,6 +75,10 @@ app = FastAPI(title="息壤", version="2.1.0", lifespan=lifespan)
 app.add_middleware(CORSMiddleware, allow_origins=["*"],
                    allow_methods=["*"], allow_headers=["*"])
 app.mount("/images", StaticFiles(directory="data/raw_documents"), name="images")
+
+# 注册鉴权路由和可观测性
+app.include_router(auth_router)
+setup_observability(app)
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -375,6 +385,8 @@ async def stream_next(session_id: str, user_id: str = Query(default="anonymous")
                     "world_mood": manager.world_env.mood.value,
                     "consistency_score": res.get("consistency_score", 100),
                 })
+                record_narrative_event("agent_action")
+                update_active_sessions(await session_mgr.active_count())
 
             elif chunk["type"] == "error":
                 yield _sse({"type": "error", "content": chunk["content"]})
@@ -418,8 +430,9 @@ async def stream_next(session_id: str, user_id: str = Query(default="anonymous")
                     "era_fact": trigger.era_fact or "无",
                 })
                 await asyncio.sleep(0.3)
-            # 写入里程碑
+            # 写入里程碑 + 记录指标
             ns.record_milestone(trigger.event_name)
+            record_trigger_fire(trigger.id, trigger.era)
 
         if ns.should_offer_choices():
             yield _sse({"type": "choices_ready", "round": ns.rounds})

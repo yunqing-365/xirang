@@ -1,0 +1,39 @@
+# .dockerignore
+# 构建 Docker 镜像时排除的文件
+
+# 版本控制
+.git/
+.gitignore
+
+# 环境与密钥
+.env
+*.key
+*.pem
+deploy/certs/
+
+# Python 缓存
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+
+# 运行时数据（通过 Volume 挂载）
+data/
+backups/
+
+# 开发工具
+.idea/
+.vscode/
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+htmlcov/
+*.log
+
+# 文档
+*.md
+docs/
+
+# CI/CD
+.github/

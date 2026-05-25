@@ -261,29 +261,107 @@ class UserProfile:
 
 
 class UserProfileStore:
-    """用户档案的持久化读写层"""
+    """
+    用户档案持久化层（SQLite 升级版）
+
+    升级说明：
+      原版使用 JSON 文件（每用户一个文件），多进程部署时存在并发写入风险。
+      本版本改用 SQLite 单文件数据库：
+        - 单表 `profiles`，每行存一个用户的完整 JSON blob
+        - 写入通过 WAL 模式（Write-Ahead Logging）保障并发安全
+        - 迁移：启动时自动将旧 JSON 文件导入并删除，零停机
+      外部接口（load / save）完全不变，调用方无需修改。
+    """
+
+    _DB_PATH = os.path.join(_settings.DATA_DIR, "profiles.db")
+
+    def __init__(self):
+        self._init_db()
+        self._migrate_from_json()
+
+    # ── 数据库初始化 ──────────────────────────────────────────
+
+    def _init_db(self):
+        import sqlite3
+        os.makedirs(os.path.dirname(self._DB_PATH) if os.path.dirname(self._DB_PATH) else ".", exist_ok=True)
+        with sqlite3.connect(self._DB_PATH) as conn:
+            conn.execute("PRAGMA journal_mode=WAL")   # 多读单写并发安全
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS profiles (
+                    user_id    TEXT PRIMARY KEY,
+                    data       TEXT NOT NULL,
+                    updated_at REAL NOT NULL
+                )
+            """)
+            conn.commit()
+
+    # ── 公开接口（与原版完全相同）────────────────────────────
 
     def load(self, user_id: str) -> UserProfile:
-        path = self._path(user_id)
-        if os.path.exists(path):
-            with open(path, "r", encoding="utf-8") as f:
-                raw = json.load(f)
-            # 反序列化嵌套 dataclass
-            raw["explorations"] = [ExplorationRecord(**e) for e in raw.get("explorations", [])]
-            raw["reflections"] = [ReflectionRecord(**r) for r in raw.get("reflections", [])]
-            return UserProfile(**raw)
-        return UserProfile(user_id=user_id)
+        import sqlite3
+        safe_id = self._safe(user_id)
+        with sqlite3.connect(self._DB_PATH) as conn:
+            row = conn.execute(
+                "SELECT data FROM profiles WHERE user_id = ?", (safe_id,)
+            ).fetchone()
+        if row is None:
+            return UserProfile(user_id=safe_id)
+        raw = json.loads(row[0])
+        raw["explorations"] = [ExplorationRecord(**e) for e in raw.get("explorations", [])]
+        raw["reflections"]  = [ReflectionRecord(**r)  for r in raw.get("reflections", [])]
+        return UserProfile(**raw)
 
     def save(self, profile: UserProfile) -> None:
-        path = self._path(profile.user_id)
-        data = asdict(profile)
-        with open(path, "w", encoding="utf-8") as f:
-            json.dump(data, f, ensure_ascii=False, indent=2)
+        import sqlite3
+        safe_id = self._safe(profile.user_id)
+        data = json.dumps(asdict(profile), ensure_ascii=False)
+        with sqlite3.connect(self._DB_PATH) as conn:
+            conn.execute("""
+                INSERT INTO profiles (user_id, data, updated_at)
+                VALUES (?, ?, ?)
+                ON CONFLICT(user_id) DO UPDATE SET
+                    data       = excluded.data,
+                    updated_at = excluded.updated_at
+            """, (safe_id, data, time.time()))
+            conn.commit()
 
-    def _path(self, user_id: str) -> str:
-        # user_id 仅允许 alphanumeric + _ + - 防路径注入
-        safe_id = "".join(c for c in user_id if c.isalnum() or c in "_-")[:64]
-        return os.path.join(_PROFILE_DIR, f"{safe_id}.json")
+    # ── 迁移工具 ──────────────────────────────────────────────
+
+    def _migrate_from_json(self):
+        """将旧版 JSON 文件一次性导入 SQLite，成功后删除原文件。"""
+        if not os.path.isdir(_PROFILE_DIR):
+            return
+        migrated = 0
+        for fname in os.listdir(_PROFILE_DIR):
+            if not fname.endswith(".json"):
+                continue
+            fpath = os.path.join(_PROFILE_DIR, fname)
+            try:
+                with open(fpath, "r", encoding="utf-8") as f:
+                    raw = json.load(f)
+                uid = raw.get("user_id", fname[:-5])
+                # 只有 SQLite 中尚无该用户时才导入，避免覆盖更新的数据
+                import sqlite3
+                with sqlite3.connect(self._DB_PATH) as conn:
+                    exists = conn.execute(
+                        "SELECT 1 FROM profiles WHERE user_id = ?", (self._safe(uid),)
+                    ).fetchone()
+                if not exists:
+                    profile = UserProfile(user_id=uid)  # 用 load 会触发 SQLite，直接手动构建
+                    raw["explorations"] = [ExplorationRecord(**e) for e in raw.get("explorations", [])]
+                    raw["reflections"]  = [ReflectionRecord(**r)  for r in raw.get("reflections", [])]
+                    self.save(UserProfile(**raw))
+                os.remove(fpath)
+                migrated += 1
+            except Exception as exc:
+                print(f"[迁移] 跳过 {fname}: {exc}")
+        if migrated:
+            print(f"[迁移] 已将 {migrated} 个 JSON 档案导入 SQLite → {self._DB_PATH}")
+
+    @staticmethod
+    def _safe(user_id: str) -> str:
+        """防路径注入：仅保留 alphanumeric + _ + -，最长 64 字符"""
+        return "".join(c for c in user_id if c.isalnum() or c in "_-")[:64]
 
 
 # ── 单例 ──────────────────────────────────────────────────────

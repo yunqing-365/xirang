@@ -1,0 +1,22 @@
+# deploy/prometheus.yml
+global:
+  scrape_interval:     15s
+  evaluation_interval: 15s
+  external_labels:
+    app: xirang
+    env: prod
+
+scrape_configs:
+  - job_name: xirang_app
+    static_configs:
+      - targets: ["app:8000"]
+    metrics_path: /metrics
+    scrape_interval: 15s
+
+  - job_name: redis
+    static_configs:
+      - targets: ["redis:9121"]   # redis_exporter sidecar
+
+  - job_name: postgres
+    static_configs:
+      - targets: ["postgres:9187"]  # postgres_exporter sidecar

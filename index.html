@@ -2645,37 +2645,77 @@
         function renderHeatmap(d) {
             const body = document.getElementById('heatmap-body');
             if (!d.total_points) {
-                body.innerHTML = `<div class="hm-hint">${d.hint || '完成小测验后，知识图将在此呈现。'}</div>`;
+                body.innerHTML = '<div class="hm-hint">' + (d.hint || '完成小测验后，知识图将在此呈现。') + '</div>';
                 return;
             }
-
-            // 总体统计
-            let html = `<div class="heatmap-summary">
-                <div class="hm-stat"><div class="hm-stat-num">${d.total_points}</div><div class="hm-stat-lbl">知识点</div></div>
-                <div class="hm-stat"><div class="hm-stat-num">${d.avg_score}</div><div class="hm-stat-lbl">平均掌握度</div></div>
-                <div class="hm-stat"><div class="hm-stat-num">${d.quiz_count}</div><div class="hm-stat-lbl">测验次数</div></div>
-            </div>`;
-
-            // 按朝代分组渲染色块
-            for (const [era, items] of Object.entries(d.by_era || {})) {
-                html += `<div class="hm-era-section">
-                    <div class="hm-era-title">📜 ${era}</div>
-                    <div class="hm-grid">`;
-                for (const item of items) {
-                    const s = item.score;
-                    // 颜色：红(0)→橙(40)→黄(60)→绿(80)→深绿(100)
-                    const hue = Math.round(s * 1.2);  // 0→0(红) 100→120(绿)
-                    const bg = `hsla(${hue}, 60%, ${90 - s * 0.3}%, 0.9)`;
-                    const barW = s + '%';
-                    html += `<div class="hm-cell" style="background:${bg};" title="${item.label} · 掌握度${s} · 练习${item.attempts}次">
-                        <div class="hm-label">${item.label.slice(0, 8)}</div>
-                        <div class="hm-score" style="color:hsl(${hue},50%,35%)">${s}分</div>
-                        <div class="hm-bar" style="width:${barW};color:hsl(${hue},60%,40%);"></div>
-                    </div>`;
-                }
-                html += `</div></div>`;
+            function scoreColor(s, alpha) {
+                var hue = Math.round(s * 1.2);
+                var light = 88 - s * 0.28;
+                return 'hsla(' + hue + ',62%,' + light + '%,' + (alpha || 1) + ')';
             }
+            function scoreTextColor(s) {
+                return 'hsl(' + Math.round(s * 1.2) + ',52%,28%)';
+            }
+            function scoreLabel(s) {
+                if (s >= 80) return '熟练';
+                if (s >= 60) return '良好';
+                if (s >= 40) return '一般';
+                return '待练';
+            }
+            var avgScore = d.avg_score || 0;
+            var html = '<div class="heatmap-summary">'
+                + '<div class="hm-stat"><div class="hm-stat-num" style="color:var(--accent-red)">' + d.total_points + '</div><div class="hm-stat-lbl">已追踪知识点</div></div>'
+                + '<div class="hm-stat" style="background:' + scoreColor(avgScore, 0.8) + '"><div class="hm-stat-num" style="color:' + scoreTextColor(avgScore) + '">' + avgScore + '</div><div class="hm-stat-lbl" style="color:' + scoreTextColor(avgScore) + '">平均掌握度</div></div>'
+                + '<div class="hm-stat"><div class="hm-stat-num" style="color:#2a6e3f">' + d.quiz_count + '</div><div class="hm-stat-lbl">累计测验次数</div></div>'
+                + '</div>';
+            html += '<div style="display:flex;align-items:center;gap:8px;margin:0 0 14px;font-size:11px;color:#a09070;flex-wrap:wrap"><span>掌握度：</span>';
+            [0,25,50,75,100].forEach(function(v) {
+                html += '<span style="display:inline-flex;align-items:center;gap:3px;"><span style="width:12px;height:12px;border-radius:3px;background:' + scoreColor(v) + ';display:inline-block;border:1px solid rgba(0,0,0,0.06)"></span>' + v + (v===100?'（精通）':'') + '</span>';
+            });
+            html += '</div>';
+            var eras = Object.entries(d.by_era || {}).sort(function(a, b) {
+                var avgA = a[1].reduce(function(s,x){return s+x.score;},0) / a[1].length;
+                var avgB = b[1].reduce(function(s,x){return s+x.score;},0) / b[1].length;
+                return avgB - avgA;
+            });
+            eras.forEach(function(entry) {
+                var era = entry[0], items = entry[1];
+                var eraAvg = Math.round(items.reduce(function(s,x){return s+x.score;},0) / items.length);
+                html += '<div class="hm-era-section"><div class="hm-era-title">📜 ' + era
+                    + ' <span style="font-size:10px;background:' + scoreColor(eraAvg,0.75) + ';color:' + scoreTextColor(eraAvg) + ';padding:1px 7px;border-radius:10px;margin-left:4px;">' + eraAvg + '分</span></div><div class="hm-grid">';
+                items.forEach(function(item) {
+                    var s = item.score;
+                    var bg = scoreColor(s, 0.88);
+                    var tc = scoreTextColor(s);
+                    var lbl = scoreLabel(s);
+                    var days = item.last_seen_days;
+                    var freshStr = days < 1 ? '今天' : (Math.round(days) + '天前');
+                    var displayLabel = item.label.length > 7 ? item.label.slice(0,7) + '…' : item.label;
+                    html += '<div class="hm-cell" style="background:' + bg + ';cursor:pointer;" '
+                        + 'onclick="sendPrompt(\'请出一道关于「' + item.label + '」的历史知识测验题，难度适中\')" '
+                        + 'title="' + item.label + '｜掌握度 ' + s + '｜练习 ' + item.attempts + ' 次｜' + freshStr + '复习">'
+                        + '<canvas class="hm-arc" width="36" height="36" data-score="' + s + '" data-hue="' + Math.round(s*1.2) + '" style="float:right;margin:-2px -2px 0 4px"></canvas>'
+                        + '<div class="hm-label" style="color:' + tc + '">' + displayLabel + '</div>'
+                        + '<div class="hm-score" style="color:' + tc + ';font-size:0.92em;margin-top:2px">' + s + ' <span style="font-size:0.8em;opacity:0.75">' + lbl + '</span></div>'
+                        + '<div style="font-size:10px;color:' + tc + ';opacity:0.6;margin-top:2px">✏ ' + item.attempts + '次</div>'
+                        + '</div>';
+                });
+                html += '</div></div>';
+            });
             body.innerHTML = html;
+            body.querySelectorAll('canvas.hm-arc').forEach(function(c) {
+                var score = +c.dataset.score, hue = +c.dataset.hue;
+                var ctx = c.getContext('2d');
+                var cx = 18, cy = 18, r = 14;
+                var start = -Math.PI / 2, end = start + (score / 100) * 2 * Math.PI;
+                ctx.beginPath(); ctx.arc(cx, cy, r, 0, 2 * Math.PI);
+                ctx.strokeStyle = 'hsla(' + hue + ',30%,70%,0.3)'; ctx.lineWidth = 3; ctx.stroke();
+                ctx.beginPath(); ctx.arc(cx, cy, r, start, end);
+                ctx.strokeStyle = 'hsl(' + hue + ',55%,38%)'; ctx.lineWidth = 3; ctx.lineCap = 'round'; ctx.stroke();
+                ctx.fillStyle = 'hsl(' + hue + ',50%,30%)';
+                ctx.font = 'bold 9px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+                ctx.fillText(score, cx, cy);
+            });
         }
 
 
