@@ -50,6 +50,18 @@ class EventType(Enum):
     REFLECTION_DONE      = auto()   # 反思内容生成完毕
     USER_PROFILE_UPDATED = auto()   # 用户成长档案更新
 
+    # ── Phase 12A · 情绪事件 ─────────────────────────────────
+    EMOTION_UPDATED      = auto()   # NPC 情绪状态更新
+    MONOLOGUE_UNLOCKED   = auto()   # 玩家解锁 NPC 内心独白
+    EMOTION_ARC_SNAPSHOT = auto()   # 情感弧线快照（用于前端弧线图）
+
+    # ── Phase 12B · 大概念事件 ───────────────────────────────
+    CONCEPT_TOUCHED      = auto()   # 检测到大概念被触碰
+    CONCEPT_SUMMARY_READY = auto()  # 会话概念总结卡就绪
+
+    # ── Phase 13B · 探究问题事件 ─────────────────────────────
+    INQUIRY_QUESTIONS_READY = auto()  # 本回合探究问题生成完毕
+
     # ── 系统事件 ──────────────────────────────────────────────
     SESSION_CREATED      = auto()
     SESSION_EXPIRED      = auto()
@@ -185,17 +197,26 @@ bus = EventBus()
 # ═══════════════════════════════════════════════════════════════
 
 _EMOJI_MAP = {
-    EventType.WORLD_CREATED:        "🌌",
-    EventType.WORLD_STATE_CHANGED:  "🌍",
-    EventType.AGENT_SPOKE:          "🗣️",
-    EventType.AGENT_THINKING:       "🧠",
-    EventType.NARRATOR_EVENT:       "📜",
-    EventType.HISTORICAL_ECHO:      "⏳",
-    EventType.CHOICES_READY:        "🎮",
-    EventType.PLAYER_CHOSE:         "⚡",
-    EventType.REFLECTION_DONE:      "✨",
-    EventType.ERROR_OCCURRED:       "❌",
-    EventType.PERSONA_VIOLATION:    "🚨",
+    EventType.WORLD_CREATED:          "🌌",
+    EventType.WORLD_STATE_CHANGED:    "🌍",
+    EventType.AGENT_SPOKE:            "🗣️",
+    EventType.AGENT_THINKING:         "🧠",
+    EventType.NARRATOR_EVENT:         "📜",
+    EventType.HISTORICAL_ECHO:        "⏳",
+    EventType.CHOICES_READY:          "🎮",
+    EventType.PLAYER_CHOSE:           "⚡",
+    EventType.REFLECTION_DONE:        "✨",
+    EventType.ERROR_OCCURRED:         "❌",
+    EventType.PERSONA_VIOLATION:      "🚨",
+    # Phase 12A
+    EventType.EMOTION_UPDATED:        "💫",
+    EventType.MONOLOGUE_UNLOCKED:     "📖",
+    EventType.EMOTION_ARC_SNAPSHOT:   "📈",
+    # Phase 12B
+    EventType.CONCEPT_TOUCHED:        "🔍",
+    EventType.CONCEPT_SUMMARY_READY:  "🎓",
+    # Phase 13B
+    EventType.INQUIRY_QUESTIONS_READY: "❓",
     EventType.RAG_RETRIEVED:        "🔍",
     EventType.SESSION_EXPIRED:      "💤",
 }

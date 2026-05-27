@@ -42,10 +42,25 @@ from reflection_engine import ReflectionEngine
 from scenario_manager import ScenarioManager
 from session_manager import session_mgr
 from user_profile import profile_store
+# Phase 12A + 12B
+from emotion_engine import EmotionEngine, Emotion, SUSHI_MONOLOGUES
+from concept_engine import ConceptEngine
+# Phase 13A + 13B
+from thinking_engine import get_thinking_engine, ThinkingEngine
+from inquiry_engine import get_inquiry_engine, InquiryEngine, BloomLevel
+# Phase 14A + 14B + 14C
+from source_workshop import get_workshop, get_source_by_id, get_all_sources, BUILTIN_SOURCES
+from creative_engine import (
+    get_creative_session, CreationType, CrossDisciplineEngine,
+    CreativeSession,
+)
 
 _settings = get_settings()
 _narrative_engine = NarrativeEngine()
 _reflection_engine = ReflectionEngine()
+# Phase 12A + 12B: 全局情绪引擎和概念引擎（每个会话共享，按 session_id 隔离状态）
+_emotion_engine = EmotionEngine()
+_concept_engine = ConceptEngine()
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -197,8 +212,24 @@ async def create_world(req: WorldCreationRequest):
 @app.post("/api/intervene")
 async def post_intervention(req: InterventionRequest):
     await _get_session(req.session_id)
-    await session_mgr.set_intervention(req.session_id, req.message)
-    return {"status": "success"}
+
+    # ── Phase 14A：检测玩家是否引用了史料 ────────────────────
+    workshop = get_workshop(req.session_id)
+    data = await _get_session(req.session_id)
+    ns_data: NarrativeState = data.get("narrative_state")
+    round_num = ns_data.rounds if ns_data else 0
+    citation_result = workshop.on_player_input(req.message, round_num)
+
+    message = req.message
+    if citation_result and citation_result.get("agent_awareness"):
+        # 将史料引用感知追加到干预指令中
+        message = message + "\n\n" + citation_result["agent_awareness"]
+
+    await session_mgr.set_intervention(req.session_id, message)
+    return {
+        "status": "success",
+        "citation": citation_result,
+    }
 
 @app.get("/api/choices/{session_id}")
 async def get_choices(session_id: str):
@@ -220,6 +251,7 @@ async def get_choices(session_id: str):
 async def submit_choice(req: ChoiceRequest):
     data = await _get_session(req.session_id)
     ns: NarrativeState = data["narrative_state"]
+    manager: ScenarioManager = data["manager"]
     chosen = next((c for c in (ns.pending_choices or []) if c.id == req.choice_id), None)
     if not chosen:
         raise HTTPException(status_code=400, detail="无效选项 ID")
@@ -227,7 +259,22 @@ async def submit_choice(req: ChoiceRequest):
     await session_mgr.set_intervention(req.session_id, directive)
     await bus.emit(Event(EventType.PLAYER_CHOSE, session_id=req.session_id,
                          payload={"choice": chosen.text}))
-    return {"status": "success", "directive": directive}
+
+    # ── Phase 13A：记录玩家选择到因果链 ──────────────────────
+    te = get_thinking_engine(req.session_id)
+    choice_node_id = te.on_player_choice(chosen.text, ns.rounds)
+
+    # 反事实推演（其他未选择的选项）
+    alt_choices = [
+        c.text for c in (ns.pending_choices or []) if c.id != req.choice_id
+    ]
+    if alt_choices:
+        asyncio.create_task(te.expand_counterfactuals(
+            chosen.text, manager.scene_desc, alt_choices,
+            ns.rounds, choice_node_id,
+        ))
+
+    return {"status": "success", "directive": directive, "causal_node_id": choice_node_id}
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -264,6 +311,17 @@ async def stream_next(session_id: str, user_id: str = Query(default="anonymous")
 
     profile = await asyncio.to_thread(profile_store.load, session_user_id)
     user_context = profile.to_context_summary()
+
+    # ── Phase 12A：会话级事件队列，捕获情绪/独白 EventBus 事件 ──
+    import asyncio as _asyncio
+    _emotion_event_queue: _asyncio.Queue = _asyncio.Queue()
+
+    async def _on_emotion_event(event: Event):
+        if event.session_id == session_id:
+            await _emotion_event_queue.put(event)
+
+    bus.subscribe(EventType.MONOLOGUE_UNLOCKED, _on_emotion_event)
+    bus.subscribe(EventType.CONCEPT_TOUCHED,    _on_emotion_event)
 
     async def event_generator():
         # ── 离线快进检测（蝴蝶效应）────────────────────────────
@@ -337,6 +395,9 @@ async def stream_next(session_id: str, user_id: str = Query(default="anonymous")
         )
         yield _sse({"type": "thinking", "name": current_agent.name})
 
+        # ── Phase 12A：确保 NPC 挂载情绪引擎 ─────────────────
+        if current_agent._emotion_engine is None:
+            current_agent.mount_emotion_engine(_emotion_engine)
         # ── Agent 流式生成 ────────────────────────────────────
         async for chunk in current_agent.generate_response_stream(
             manager.scene_desc, manager.current_task, manager.shared_workspace,
@@ -374,6 +435,29 @@ async def stream_next(session_id: str, user_id: str = Query(default="anonymous")
 
                 ns.record_milestone(historical_echo if historical_echo != "无" else "")
 
+                # ── Phase 12B：大概念扫描 ─────────────────────
+                scan_text = f"{dialogue} {action}"
+                touched_concepts = _concept_engine.scan_text(session_id, scan_text, ns.rounds)
+                if touched_concepts:
+                    await bus.emit(Event(
+                        type=EventType.CONCEPT_TOUCHED,
+                        session_id=session_id,
+                        payload={
+                            "concepts": [c.value for c in touched_concepts],
+                            "round": ns.rounds,
+                        },
+                    ))
+
+                # ── Phase 12A：情绪状态快照（用于前端弧线） ──
+                emotion_state = _emotion_engine.get_state(current_agent.name)
+                emotion_payload = {}
+                if emotion_state:
+                    emotion_payload = {
+                        "name": current_agent.name,
+                        "emotion": emotion_state.current_emotion.value,
+                        "intensity": emotion_state.intensity,
+                    }
+
                 yield _sse({
                     "type": "agent_action",
                     "name": current_agent.name,
@@ -384,9 +468,23 @@ async def stream_next(session_id: str, user_id: str = Query(default="anonymous")
                     "workspace": manager.shared_workspace,
                     "world_mood": manager.world_env.mood.value,
                     "consistency_score": res.get("consistency_score", 100),
+                    # Phase 12A: 情绪状态随每次 agent_action 下发
+                    "emotion_state": emotion_payload,
+                    # Phase 12B: 本回合触碰的概念
+                    "concepts_touched": [c.value for c in touched_concepts],
                 })
                 record_narrative_event("agent_action")
                 update_active_sessions(await session_mgr.active_count())
+
+                # ── Phase 13B：生成本回合探究问题（异步，不阻塞 SSE）──
+                asyncio.create_task(_generate_and_cache_inquiry_questions(
+                    session_id=session_id,
+                    scene_desc=manager.scene_desc,
+                    event_summary=f"{current_agent.name}：{dialogue[:80]}",
+                    era=getattr(manager.world_env, "era", "宋代"),
+                    concepts=[c.value for c in touched_concepts],
+                    user_id=session_user_id,
+                ))
 
             elif chunk["type"] == "error":
                 yield _sse({"type": "error", "content": chunk["content"]})
@@ -435,6 +533,23 @@ async def stream_next(session_id: str, user_id: str = Query(default="anonymous")
             record_trigger_fire(trigger.id, trigger.era)
 
         if ns.should_offer_choices():
+            # ── Phase 12A：flush 情绪/独白 EventBus 事件到前端 SSE ──
+            while not _emotion_event_queue.empty():
+                evt: Event = _emotion_event_queue.get_nowait()
+                if evt.type == EventType.MONOLOGUE_UNLOCKED:
+                    yield _sse({
+                        "type": "monologue_unlocked",
+                        "name": evt.payload.get("name"),
+                        "monologue": evt.payload.get("monologue"),
+                        "emotion_context": evt.payload.get("emotion_context"),
+                    })
+                elif evt.type == EventType.CONCEPT_TOUCHED:
+                    yield _sse({
+                        "type": "concept_touched",
+                        "concepts": evt.payload.get("concepts", []),
+                        "round": evt.payload.get("round", 0),
+                    })
+
             yield _sse({"type": "choices_ready", "round": ns.rounds})
             await bus.emit(Event(EventType.CHOICES_READY, session_id,
                                  payload={"round": ns.rounds}))
@@ -1252,6 +1367,432 @@ async def list_classrooms():
          "member_count": len(r["members"]), "created_at": r["created_at"]}
         for r in _classrooms.values()
     ]
+
+
+
+# ════════════════════════════════════════════════════════════════
+# Phase 12A · 情绪弧线 API
+# ════════════════════════════════════════════════════════════════
+
+@app.get("/api/emotion/arc/{npc_name}")
+async def get_emotion_arc(npc_name: str):
+    """
+    获取指定 NPC 的情感弧线数据（供前端绘制弧线图）。
+    返回情绪历史快照列表。
+    """
+    arc = _emotion_engine.get_arc_data(npc_name)
+    state = _emotion_engine.get_state(npc_name)
+    return {
+        "npc": npc_name,
+        "current_emotion": state.current_emotion.value if state else "未知",
+        "intensity": state.intensity if state else 0,
+        "resonance_points": state.resonance_points if state else 0,
+        "arc": arc,
+        "unlocked_monologues": [
+            m.to_dict() for m in state.get_unlocked_monologues()
+        ] if state else [],
+    }
+
+
+@app.get("/api/emotion/all_states")
+async def get_all_emotion_states():
+    """获取当前场景中所有 NPC 的情绪状态（用于教师驾驶舱）"""
+    return _emotion_engine.get_all_states_summary()
+
+
+# ════════════════════════════════════════════════════════════════
+# Phase 12B · 大概念 API
+# ════════════════════════════════════════════════════════════════
+
+@app.get("/api/concepts/summary/{session_id}")
+async def get_concept_summary(session_id: str):
+    """
+    获取会话的大概念探索总结卡。
+    包含：触碰的概念列表、高频概念、对应探究问题。
+    """
+    summary = _concept_engine.get_session_summary(session_id)
+    if not summary:
+        return {"message": "该会话尚无概念记录"}
+    return summary
+
+
+@app.post("/api/concepts/analyze/{session_id}")
+async def analyze_concepts_deep(session_id: str):
+    """
+    触发 LLM 对当前会话进行深度概念分析（会话结束时调用）。
+    """
+    session_data = await session_mgr.get(session_id)
+    if not session_data:
+        raise HTTPException(status_code=404, detail="Session not found")
+    manager = session_data.get("manager")
+    if not manager:
+        raise HTTPException(status_code=404, detail="Manager not found")
+    dialogue_summary = manager.current_dialogue[-1000:]
+    concepts = await _concept_engine.analyze_with_llm(session_id, dialogue_summary)
+    return {
+        "session_id": session_id,
+        "llm_identified_concepts": [c.value for c in concepts],
+        "summary": _concept_engine.get_session_summary(session_id),
+    }
+
+
+@app.get("/api/concepts/questions/{session_id}")
+async def get_inquiry_questions(session_id: str, n: int = 3):
+    """
+    获取本会话当前的探究式问题（Phase 13B 接口）。
+    """
+    questions = _concept_engine.get_round_questions(session_id, n=n)
+    return {"session_id": session_id, "questions": questions}
+
+
+
+
+# ════════════════════════════════════════════════════════════════
+# Phase 13A · 历史思维可视化 API
+# ════════════════════════════════════════════════════════════════
+
+@app.get("/api/thinking/causal_graph/{session_id}")
+async def get_causal_graph(session_id: str):
+    """
+    获取当前会话的因果链图谱数据。
+    返回节点和边的结构，供前端 D3/ECharts 渲染。
+    """
+    te = get_thinking_engine(session_id)
+    return te.get_causal_graph()
+
+
+@app.post("/api/thinking/perspectives")
+async def get_perspectives(
+    session_id: str = Query(...),
+    event_desc: str = Query(...),
+):
+    """生成多视角对比：同一事件，不同身份的解读"""
+    data = await _get_session(session_id)
+    manager: ScenarioManager = data["manager"]
+    era = getattr(manager.world_env, "era", "宋代")
+    te = get_thinking_engine(session_id)
+    views = await te.get_perspectives(event_desc, era)
+    return {"session_id": session_id, "event": event_desc, "perspectives": views}
+
+
+@app.post("/api/thinking/rate_source")
+async def rate_source(
+    session_id: str = Query(...),
+    source_text: str = Query(...),
+    deep: bool = Query(default=False),
+):
+    """史料可信度评级（fast=关键词匹配，deep=LLM分析）"""
+    te = get_thinking_engine(session_id)
+    if deep:
+        data = await _get_session(session_id)
+        manager: ScenarioManager = data["manager"]
+        era = getattr(manager.world_env, "era", "宋代")
+        result = await te.rate_source_deep(source_text, era)
+    else:
+        result = te.rate_source_quick(source_text)
+    return {"session_id": session_id, "rating": result}
+
+
+@app.post("/api/thinking/puzzle/generate")
+async def generate_puzzle(
+    session_id: str = Query(...),
+    difficulty: str = Query(default="medium"),
+):
+    """生成时序重建谜题"""
+    data = await _get_session(session_id)
+    manager: ScenarioManager = data["manager"]
+    ns: NarrativeState = data["narrative_state"]
+    era = getattr(manager.world_env, "era", "宋代")
+    te = get_thinking_engine(session_id)
+    puzzle = await te.generate_puzzle(
+        manager.scene_desc, era, ns.milestones, difficulty
+    )
+    if not puzzle:
+        raise HTTPException(status_code=422, detail="里程碑事件不足，无法生成谜题（需至少3个）")
+    return puzzle
+
+
+@app.post("/api/thinking/puzzle/check")
+async def check_puzzle(session_id: str = Query(...), body: dict = None):
+    """检查时序谜题答案"""
+    te = get_thinking_engine(session_id)
+    student_order = (body or {}).get("order", [])
+    return te.check_puzzle_answer(student_order)
+
+
+# ════════════════════════════════════════════════════════════════
+# Phase 13B · 探究式问题 API
+# ════════════════════════════════════════════════════════════════
+
+# 后台任务：异步生成并缓存探究问题
+async def _generate_and_cache_inquiry_questions(
+    session_id: str,
+    scene_desc: str,
+    event_summary: str,
+    era: str,
+    concepts: List[str],
+    user_id: str,
+):
+    try:
+        engine = get_inquiry_engine(session_id, scene_desc, era, user_id)
+        await engine.generate_round_questions(
+            scene_desc, event_summary, era, concepts, n=3
+        )
+    except Exception as e:
+        print(f"⚠️ [探究问题] 后台生成失败: {e}")
+
+
+@app.get("/api/inquiry/questions/{session_id}")
+async def get_inquiry_questions(session_id: str, n: int = 3):
+    """获取本回合的 Bloom 分层探究问题"""
+    data = await _get_session(session_id)
+    manager: ScenarioManager = data["manager"]
+    ns: NarrativeState = data["narrative_state"]
+    era = getattr(manager.world_env, "era", "宋代")
+    engine = get_inquiry_engine(session_id, manager.scene_desc, era)
+    if engine._current_questions:
+        return {"questions": [q.to_dict() for q in engine._current_questions]}
+    # 尚未缓存，即时生成
+    questions = await engine.generate_round_questions(
+        manager.scene_desc,
+        manager.current_dialogue[-200:],
+        era,
+        n=n,
+    )
+    return {"questions": questions}
+
+
+@app.post("/api/inquiry/socratic/start")
+async def start_socratic(session_id: str = Query(...), question_id: str = Query(...)):
+    """开始一段苏格拉底式追问对话"""
+    data = await _get_session(session_id)
+    manager: ScenarioManager = data["manager"]
+    era = getattr(manager.world_env, "era", "宋代")
+    engine = get_inquiry_engine(session_id, manager.scene_desc, era)
+    opening = engine.start_socratic(question_id)
+    return {"opening": opening, "question_id": question_id}
+
+
+@app.get("/api/inquiry/socratic/stream/{session_id}")
+async def socratic_stream(session_id: str, student_input: str = Query(...)):
+    """苏格拉底追问流式响应（SSE）"""
+    data = await _get_session(session_id)
+    manager: ScenarioManager = data["manager"]
+    era = getattr(manager.world_env, "era", "宋代")
+    engine = get_inquiry_engine(session_id, manager.scene_desc, era)
+
+    async def generator():
+        async for token in engine.socratic_stream(student_input):
+            yield _sse({"type": "socratic_token", "token": token})
+        yield _sse({"type": "socratic_done"})
+
+    return StreamingResponse(generator(), media_type="text/event-stream")
+
+
+@app.post("/api/inquiry/bookmark")
+async def bookmark_question(session_id: str = Query(...), question_id: str = Query(...)):
+    """收藏一道探究问题到学生问题本"""
+    data = await _get_session(session_id)
+    manager: ScenarioManager = data["manager"]
+    era = getattr(manager.world_env, "era", "宋代")
+    engine = get_inquiry_engine(session_id, manager.scene_desc, era)
+    return engine.bookmark_question(question_id)
+
+
+@app.get("/api/inquiry/notebook/{session_id}")
+async def get_notebook(session_id: str):
+    """获取学生的问题收藏本"""
+    data = await _get_session(session_id)
+    manager: ScenarioManager = data["manager"]
+    era = getattr(manager.world_env, "era", "宋代")
+    engine = get_inquiry_engine(session_id, manager.scene_desc, era)
+    return engine.get_notebook()
+
+
+@app.get("/api/inquiry/socratic/history/{session_id}")
+async def get_socratic_history(session_id: str):
+    """获取当前苏格拉底对话历史"""
+    data = await _get_session(session_id)
+    manager: ScenarioManager = data["manager"]
+    era = getattr(manager.world_env, "era", "宋代")
+    engine = get_inquiry_engine(session_id, manager.scene_desc, era)
+    return {"history": engine.get_dialogue_history()}
+
+
+
+# ════════════════════════════════════════════════════════════════
+# Phase 14A · 史料直面工作坊 API
+# ════════════════════════════════════════════════════════════════
+
+@app.get("/api/workshop/sources")
+async def list_sources(era: str = Query(default="")):
+    """列出内置史料库（可按时代过滤）"""
+    return get_all_sources(era)
+
+
+@app.post("/api/workshop/present/{session_id}")
+async def present_source(session_id: str, fragment_id: str = Query(...)):
+    """
+    向学生呈现一条史料片段（自动生成注释）。
+    """
+    await _get_session(session_id)
+    fragment = get_source_by_id(fragment_id)
+    if not fragment:
+        raise HTTPException(status_code=404, detail=f"史料 {fragment_id} 不存在")
+    workshop = get_workshop(session_id)
+    data = await _get_session(session_id)
+    manager: ScenarioManager = data["manager"]
+    era = getattr(manager.world_env, "era", fragment.era)
+    result = await workshop.present_fragment(fragment, era)
+    return result
+
+
+@app.get("/api/workshop/search/{session_id}")
+async def search_sources(session_id: str, query: str = Query(...), era: str = Query(default="")):
+    """关键词搜索史料"""
+    workshop = get_workshop(session_id)
+    return {"results": workshop.search_sources(query, era)}
+
+
+@app.post("/api/workshop/compare/{session_id}")
+async def compare_sources(
+    session_id: str,
+    fragment_id_a: str = Query(...),
+    fragment_id_b: str = Query(...),
+    event_desc: str = Query(default="当前历史事件"),
+):
+    """对比两条史料"""
+    workshop = get_workshop(session_id)
+    return await workshop.compare_fragments(fragment_id_a, fragment_id_b, event_desc)
+
+
+@app.get("/api/workshop/citations/{session_id}")
+async def get_citations(session_id: str):
+    """获取学生引用史料的统计"""
+    workshop = get_workshop(session_id)
+    return workshop.get_citation_summary()
+
+
+# ════════════════════════════════════════════════════════════════
+# Phase 14B · 学科跨界连接 API
+# ════════════════════════════════════════════════════════════════
+
+@app.get("/api/cross/links/{session_id}")
+async def get_cross_links(
+    session_id: str,
+    focus: str = Query(default=""),
+):
+    """
+    获取当前场景的跨学科连接点。
+    focus: 指定聚焦的学科（逗号分隔，如 '语文,地理'）
+    """
+    data = await _get_session(session_id)
+    manager: ScenarioManager = data["manager"]
+    era = getattr(manager.world_env, "era", "宋代")
+    focus_subjects = [s.strip() for s in focus.split(",") if s.strip()] or None
+
+    cs = get_creative_session(session_id)
+    # 从场景和对话中提取关键词
+    scene_kw = []
+    for kw in ["苏轼", "贬谪", "王安石", "变法", "科举", "朝廷", "赤壁"]:
+        if kw in manager.scene_desc or kw in manager.current_dialogue:
+            scene_kw.append(kw)
+
+    links = await cs.get_cross_links(
+        manager.scene_desc,
+        era,
+        manager.current_dialogue[-300:],
+        scene_keywords=scene_kw,
+        focus_subjects=focus_subjects,
+    )
+    return {"session_id": session_id, "era": era, "links": links}
+
+
+# ════════════════════════════════════════════════════════════════
+# Phase 14C · 学生创作输出 API
+# ════════════════════════════════════════════════════════════════
+
+class CreationRequest(BaseModel):
+    session_id: str
+    creation_type: str       # "历史日记" | "历史书信" | "仿古词作" | "历史报道" | "历史短论"
+    draft: str
+    npc: str = ""
+    event: str = ""
+    user_id: str = "anonymous"
+
+
+@app.post("/api/create/submit")
+async def submit_creation(req: CreationRequest):
+    """
+    提交学生创作草稿，返回 AI 润色版本（非流式）。
+    """
+    await _get_session(req.session_id)
+    data = await _get_session(req.session_id)
+    manager: ScenarioManager = data["manager"]
+    era = getattr(manager.world_env, "era", "宋代")
+
+    type_map = {ct.value: ct for ct in CreationType}
+    ctype = type_map.get(req.creation_type, CreationType.DIARY)
+
+    cs = get_creative_session(req.session_id, req.user_id)
+    creation = await cs.start_creation(ctype, req.draft, era, req.npc, req.event)
+    return creation.to_dict()
+
+
+@app.get("/api/create/polish/stream/{session_id}")
+async def polish_stream(
+    session_id: str,
+    creation_type: str = Query(...),
+    draft: str = Query(...),
+    npc: str = Query(default=""),
+    event: str = Query(default=""),
+    user_id: str = Query(default="anonymous"),
+):
+    """
+    AI 润色流式接口（SSE）。
+    适合实时打字机效果展示润色过程。
+    """
+    data = await _get_session(session_id)
+    manager: ScenarioManager = data["manager"]
+    era = getattr(manager.world_env, "era", "宋代")
+
+    type_map = {ct.value: ct for ct in CreationType}
+    ctype = type_map.get(creation_type, CreationType.DIARY)
+    cs = get_creative_session(session_id, user_id)
+
+    async def generator():
+        async for token in cs.polish_stream(ctype, draft, era, npc, event):
+            yield _sse({"type": "polish_token", "token": token})
+        yield _sse({"type": "polish_done"})
+
+    return StreamingResponse(generator(), media_type="text/event-stream")
+
+
+@app.get("/api/create/list/{session_id}")
+async def list_creations(session_id: str, user_id: str = Query(default="anonymous")):
+    """获取当前会话的所有创作"""
+    cs = get_creative_session(session_id, user_id)
+    return {"creations": cs.get_all_creations()}
+
+
+@app.get("/api/create/export/{session_id}/{creation_id}")
+async def export_creation(session_id: str, creation_id: str):
+    """导出创作为 Markdown 文本"""
+    cs = get_creative_session(session_id)
+    md = cs.export_markdown(creation_id)
+    if not md:
+        raise HTTPException(status_code=404, detail="创作不存在")
+    return {"markdown": md}
+
+
+@app.get("/api/create/card/{session_id}/{creation_id}")
+async def get_share_card(session_id: str, creation_id: str):
+    """获取分享卡数据"""
+    cs = get_creative_session(session_id)
+    creation = cs.get_creation(creation_id)
+    if not creation:
+        raise HTTPException(status_code=404, detail="创作不存在")
+    return cs.engine.build_share_card_data(creation)
 
 
 if __name__ == "__main__":

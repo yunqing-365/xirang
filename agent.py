@@ -1,11 +1,15 @@
-# agent.py  ── 硬核升级版
+# agent.py  ── Phase 12A 升级版
 """
-本轮升级：
+本轮升级（Phase 12A）：
   1. 挂载 PersonaEngine：人格指纹初始化 + 每轮一致性检查
   2. 接入 EventBus：Agent 行为通过事件广播，解耦下游消费
   3. 记忆写入改用 add_episodic_memory_async（避免 to_thread 嵌套）
   4. 情绪传递给记忆检索（情绪相似性加权）
   5. 支持人格违规时触发 PERSONA_VIOLATION 事件
+  6. [NEW] 挂载 EmotionEngine：七情状态机，情绪驱动对话风格
+     - Agent 响应后自动更新情绪状态
+     - 情绪风格提示注入 System Prompt
+     - 内心独白解锁时触发 MONOLOGUE_UNLOCKED 事件
 """
 import asyncio
 import json
@@ -16,8 +20,9 @@ from openai import AsyncOpenAI
 from config import get_settings
 from memory import SocialMemory
 from persona_engine import PersonaEngine
+from emotion_engine import EmotionEngine, Emotion
 from event_bus import bus, Event, EventType
-from prompt_templates import AGENT_SYSTEM
+from prompt_templates import AGENT_SYSTEM, EMOTION_STYLE_INJECTION
 
 _settings = get_settings()
 _client = AsyncOpenAI(api_key=_settings.API_KEY, base_url=_settings.BASE_URL)
@@ -35,12 +40,23 @@ class SocialAgent:
         self.memory = SocialMemory(name)
         self.persona = PersonaEngine(name)
         self.rag_engine = None
+        # Phase 12A: 情绪状态（由外部 EmotionEngine 统一管理，此处存引用）
+        self._emotion_engine = None  # type: Optional[EmotionEngine]
 
     def mount_knowledge(self, rag_engine):
         self.rag_engine = rag_engine
 
     def set_era(self, era: str):
         self.era = era
+
+    def mount_emotion_engine(self, emotion_engine, initial_emotion: Emotion = Emotion.PLEASURE):
+        """挂载情绪引擎，初始化该 NPC 的情绪状态。Phase 12A"""
+        self._emotion_engine = emotion_engine
+        emotion_engine.ensure_state(self.name)
+        # 用初始情绪初始化
+        state = emotion_engine.get_state(self.name)
+        if state:
+            state.current_emotion = initial_emotion
 
     async def initialize(self):
         """
@@ -110,6 +126,17 @@ class SocialAgent:
             system_prompt += f"\n\n=== 【与你对话的高维观察者背景】 ===\n{user_context}"
         if persona_constraint:
             system_prompt += f"\n\n=== 【你的人格约束（必须严格遵守）】 ===\n{persona_constraint}"
+
+        # ── Phase 12A：注入情绪风格提示 ──────────────────────
+        if self._emotion_engine:
+            emotion_state = self._emotion_engine.get_state(self.name)
+            if emotion_state:
+                emotion_hint = EMOTION_STYLE_INJECTION.substitute(
+                    emotion=emotion_state.current_emotion.value,
+                    intensity=emotion_state.intensity,
+                    style_hint=emotion_state.get_style_hint(),
+                )
+                system_prompt += f"\n\n{emotion_hint}"
 
         # ── EventBus：通知"开始思考" ─────────────────────────
         await bus.emit(Event(
@@ -188,6 +215,37 @@ class SocialAgent:
                     env_state_text, action, dialogue
                 )
             )
+
+            # ── Phase 12A：更新情绪状态 ──────────────────────
+            if self._emotion_engine:
+                updated_state = self._emotion_engine.on_agent_response(
+                    self.name,
+                    emotion_keyword=emotion,
+                    intensity_hint=60,
+                )
+                # 广播情绪更新事件
+                await bus.emit(Event(
+                    type=EventType.EMOTION_UPDATED,
+                    session_id=session_id,
+                    payload={
+                        "name": self.name,
+                        "emotion": updated_state.current_emotion.value,
+                        "intensity": updated_state.intensity,
+                        "arc": updated_state.history[-1].to_dict() if updated_state.history else {},
+                    },
+                ))
+                # 检查内心独白解锁
+                unlocked = updated_state.check_unlock()
+                if unlocked:
+                    await bus.emit(Event(
+                        type=EventType.MONOLOGUE_UNLOCKED,
+                        session_id=session_id,
+                        payload={
+                            "name": self.name,
+                            "monologue": unlocked.content,
+                            "emotion_context": unlocked.emotion_context.value,
+                        },
+                    ))
 
             # ── EventBus：广播完整行动 ────────────────────────
             await bus.emit(Event(
