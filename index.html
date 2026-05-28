@@ -845,6 +845,55 @@
         .creation-action-btn:hover { background:rgba(200,168,74,0.12); }
         .creation-action-btn.primary { background:rgba(200,168,74,0.2); font-weight:600; }
 
+        /* ══ Phase 15 公共样式 ═══════════════════════════════ */
+        .comm-tab {
+            background:transparent; border:1px solid rgba(200,168,74,0.3);
+            color:#a07830; padding:5px 14px; border-radius:6px;
+            cursor:pointer; font-size:0.82em; letter-spacing:1px;
+            font-family:'Noto Serif SC',serif; transition:all 0.2s;
+        }
+        .comm-tab.active-tab {
+            background:rgba(200,168,74,0.15); border-color:#c8a84a; color:#5a3e1b;
+        }
+        .map-node-recommend { fill:#E8A020; }
+        .map-node-explored  { fill:#2ECC71; }
+        .map-node-locked    { fill:#ccc; }
+        .map-node-default   { fill:#c8a84a; }
+        .dashboard-stat-card {
+            background:rgba(200,168,74,0.08); border:1px solid rgba(200,168,74,0.25);
+            border-radius:8px; padding:12px 14px; text-align:center;
+        }
+        .dashboard-stat-num  { font-size:1.6em; font-weight:700; color:#3a2000; }
+        .dashboard-stat-label { font-size:0.72em; color:#a07830; margin-top:2px; letter-spacing:1px; }
+        .student-row {
+            display:flex; align-items:center; gap:10px; padding:8px 12px;
+            background:rgba(200,168,74,0.06); border-radius:6px;
+            border-left:3px solid transparent; font-size:0.82em;
+        }
+        .student-row.stuck { border-left-color:#E24B4A; background:rgba(226,75,74,0.06); }
+        .student-name { font-weight:600; color:#3a2000; min-width:60px; }
+        .student-stat { color:#a07830; font-size:0.9em; }
+        .heatmap-cell {
+            padding:4px 10px; border-radius:12px; font-size:0.72em;
+            color:#fff; font-weight:600; letter-spacing:1px;
+        }
+        .suggestion-card {
+            padding:10px 14px; border-radius:8px; margin-bottom:8px;
+            font-size:0.82em; line-height:1.6;
+        }
+        .suggestion-high   { background:rgba(226,75,74,0.1); border-left:3px solid #E24B4A; }
+        .suggestion-medium { background:rgba(243,156,18,0.1); border-left:3px solid #F39C12; }
+        .suggestion-low    { background:rgba(24,95,165,0.1);  border-left:3px solid #185FA5; }
+        .map-recommend-card {
+            background:rgba(200,168,74,0.1); border:1px solid rgba(200,168,74,0.3);
+            border-radius:8px; padding:10px 14px; cursor:pointer;
+            transition:background 0.2s; max-width:200px;
+        }
+        .map-recommend-card:hover { background:rgba(200,168,74,0.2); }
+        .map-card-era { font-size:0.68em; color:#a07830; margin-bottom:3px; letter-spacing:1px; }
+        .map-card-title { font-size:0.88em; font-weight:600; color:#3a2000; margin-bottom:4px; }
+        .map-card-desc { font-size:0.75em; color:#6a5040; line-height:1.5; }
+
         /* 新徽章解锁通知 toast */
         #badge-toast {
             position:fixed; bottom:100px; left:50%; transform:translateX(-50%) translateY(20px);
@@ -1566,9 +1615,41 @@
                 <div id="creation-list-wrap" style="margin-top:8px;"></div>
             </div>
 
+            <!-- ★ Phase 15A · 学习路径图谱面板 ★ -->
+            <div class="side-panel" id="map-panel">
+                <div class="side-panel-title" style="display:flex;align-items:center;justify-content:space-between;">
+                    <span>探 索 地 图</span>
+                    <button onclick="showLearningMap()"
+                        style="font-size:0.68em;background:transparent;border:1px solid #c8a84a;
+                               color:#a07830;padding:2px 8px;border-radius:10px;cursor:pointer;
+                               letter-spacing:1px;">展开</button>
+                </div>
+                <div style="font-size:0.75em;color:#a07830;margin-bottom:6px;">已探索时空 · 下一步推荐</div>
+                <div id="map-recommend-wrap">
+                    <div style="font-size:0.75em;color:#bbb;text-align:center;padding:8px 0;">
+                        探索后解锁推荐…
+                    </div>
+                </div>
+            </div>
+
+            <!-- ★ Phase 15D · 导出中心面板 ★ -->
+            <div class="side-panel" id="export-panel">
+                <div class="side-panel-title">导 出 中 心</div>
+                <div style="display:flex;flex-direction:column;gap:6px;margin-top:4px;">
+                    <button class="creation-type-btn" style="text-align:left;padding:8px 10px;"
+                        onclick="exportLessonPlan()">📋 导出教案</button>
+                    <button class="creation-type-btn" style="text-align:left;padding:8px 10px;"
+                        onclick="exportStudentReport()">📄 生成探究报告</button>
+                    <button class="creation-type-btn" style="text-align:left;padding:8px 10px;"
+                        onclick="issueBadge()">🏅 领取探索徽章</button>
+                </div>
+                <div id="export-status" style="font-size:0.72em;color:#a07830;margin-top:8px;"></div>
+            </div>
+
+        </div>
+    </div>
 
 
-    <div class="controls hidden" id="controlsPanel">
         <div class="mode-switch">
             <button id="godModeBtn" class="active" onclick="switchMode('god')">⚡ 上帝环境干预</button>
             <button id="playerModeBtn" onclick="switchMode('player')">👤 玩家化身入局</button>
@@ -2916,6 +2997,281 @@
             document.getElementById('playerPanel').classList.toggle('hidden', mode!=='player');
         }
 
+            document.getElementById('playerPanel').classList.toggle('hidden', mode!=='player');
+        }
+
+        /* ══ Phase 15A · 学习地图 ════════════════════════════ */
+
+        async function showLearningMap() {
+            const overlay = document.getElementById('map-overlay');
+            overlay.style.opacity = '1'; overlay.style.pointerEvents = 'all';
+            const modal = document.getElementById('map-modal');
+            if (modal) modal.style.transform = 'scale(1)';
+            const uid = window._userId || 'anonymous';
+            try {
+                const res = await fetch(`/api/map/${uid}`);
+                const data = await res.json();
+                renderMapSVG(data.nodes || [], data.edges || []);
+                renderMapRecommendCards(data.recommended || []);
+                renderMapSideRecommend(data.recommended || []);
+            } catch(e) { console.error(e); }
+        }
+
+        function closeMapOverlay() {
+            const overlay = document.getElementById('map-overlay');
+            overlay.style.opacity = '0'; overlay.style.pointerEvents = 'none';
+            const modal = document.getElementById('map-modal');
+            if (modal) modal.style.transform = 'scale(0.97)';
+        }
+
+        function renderMapSVG(nodes, edges) {
+            const svg = document.getElementById('map-svg');
+            if (!svg) return;
+            const W = svg.clientWidth || 700, H = 460;
+            const eraGroups = {};
+            nodes.forEach(n => { if (!eraGroups[n.era]) eraGroups[n.era]=[]; eraGroups[n.era].push(n); });
+            const eras = Object.keys(eraGroups);
+            const eraW = W / Math.max(eras.length, 1);
+            const nodePos = {};
+            eras.forEach((era, ei) => {
+                eraGroups[era].forEach((n, ni) => {
+                    nodePos[n.id] = { x: eraW*ei + eraW/2 + (ni%2===0?-15:15), y: 70 + Math.floor(ni/2)*100 + (ei%2)*25 };
+                });
+            });
+            const nodeColor = n => n.explored?'#2ECC71':n.recommended?'#E8A020':'#bbb';
+            let html = '<defs><marker id="arr-p" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" orient="auto"><path d="M 0 0 L 10 5 L 0 10 z" fill="#185FA5"/></marker><marker id="arr-r" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" orient="auto"><path d="M 0 0 L 10 5 L 0 10 z" fill="#c8a84a"/></marker></defs>';
+            eras.forEach((era, ei) => {
+                const ms = eraGroups[era];
+                const xs = ms.map(n=>(nodePos[n.id]||{x:0}).x), ys = ms.map(n=>(nodePos[n.id]||{y:0}).y);
+                const x0=Math.min(...xs)-35, y0=Math.min(...ys)-35, x1=Math.max(...xs)+35, y1=Math.max(...ys)+35;
+                html += `<rect x="${x0}" y="${y0}" width="${x1-x0}" height="${y1-y0}" rx="10" fill="rgba(200,168,74,0.05)" stroke="rgba(200,168,74,0.2)" stroke-width="1"/>
+                    <text x="${(x0+x1)/2}" y="${y0+16}" text-anchor="middle" font-size="11" fill="#a07830" letter-spacing="2">${era}</text>`;
+            });
+            edges.forEach(e => {
+                const s=nodePos[e.source], t=nodePos[e.target];
+                if (!s||!t) return;
+                const isPre = e.type==='prerequisite';
+                html += `<line x1="${s.x}" y1="${s.y}" x2="${t.x}" y2="${t.y}" stroke="${isPre?'#185FA5':'#c8a84a'}" stroke-width="${isPre?1.5:1}" stroke-dasharray="${isPre?'none':'5,4'}" opacity="0.5" marker-end="url(#${isPre?'arr-p':'arr-r'})"/>`;
+            });
+            nodes.forEach(n => {
+                const pos=nodePos[n.id];
+                if (!pos) return;
+                const color=nodeColor(n), r=22;
+                const opacity = n.explored||n.recommended ? 0.9 : 0.4;
+                html += `<g style="cursor:pointer" onclick="showToastMsg('${n.era} · ${n.title}')">
+                    <circle cx="${pos.x}" cy="${pos.y}" r="${r}" fill="${color}" opacity="${opacity}" stroke="${n.recommended?'#fff':n.explored?'#fff':'transparent'}" stroke-width="2"/>
+                    <text x="${pos.x}" y="${pos.y+4}" text-anchor="middle" font-size="12" fill="${n.explored||n.recommended?'#fff':'#aaa'}">${n.icon||'◉'}</text>
+                    <text x="${pos.x}" y="${pos.y+r+14}" text-anchor="middle" font-size="9.5" fill="${n.explored?'#2ECC71':n.recommended?'#E8A020':'#999'}">${(n.title||'').slice(0,8)}</text>
+                </g>`;
+            });
+            svg.innerHTML = html;
+        }
+
+        function renderMapRecommendCards(recommended) {
+            const wrap = document.getElementById('map-recommend-cards');
+            if (!wrap) return;
+            wrap.innerHTML = recommended.map(n => `
+                <div class="map-recommend-card">
+                    <div class="map-card-era">${n.era} · ${'★'.repeat(n.difficulty||1)}</div>
+                    <div class="map-card-title">${n.icon||''} ${n.title}</div>
+                    <div class="map-card-desc">${(n.description||'').slice(0,45)}…</div>
+                    <div style="font-size:0.7em;color:#185FA5;margin-top:5px;">${(n.concepts||[]).slice(0,3).join(' · ')}</div>
+                </div>`).join('');
+        }
+
+        function renderMapSideRecommend(recommended) {
+            const wrap = document.getElementById('map-recommend-wrap');
+            if (!wrap||!recommended.length) return;
+            wrap.innerHTML = recommended.slice(0,2).map(n => `
+                <div style="background:rgba(200,168,74,0.08);border-radius:6px;padding:8px 10px;margin-bottom:6px;
+                            border-left:3px solid #E8A020;cursor:pointer;" onclick="showLearningMap()">
+                    <div style="font-size:0.7em;color:#a07830;">${n.era}</div>
+                    <div style="font-size:0.83em;font-weight:600;color:#3a2000;">${n.icon||''} ${n.title}</div>
+                    <div style="font-size:0.72em;color:#6a5040;line-height:1.4;margin-top:2px;">${(n.description||'').slice(0,38)}…</div>
+                </div>`).join('');
+        }
+
+        async function loadMapRecommend() {
+            const uid = window._userId || 'anonymous';
+            try {
+                const res = await fetch(`/api/map/recommend/${uid}?n=2`);
+                const data = await res.json();
+                renderMapSideRecommend(data.recommended || []);
+            } catch(e) {}
+        }
+
+        /* ══ Phase 15B · 教师驾驶舱 ══════════════════════════ */
+
+        async function showDashboard() {
+            const overlay = document.getElementById('dashboard-overlay');
+            overlay.style.opacity='1'; overlay.style.pointerEvents='all';
+            overlay.querySelector('div').style.transform='translateY(0)';
+        }
+        function closeDashboardOverlay() {
+            const overlay = document.getElementById('dashboard-overlay');
+            overlay.style.opacity='0'; overlay.style.pointerEvents='none';
+            overlay.querySelector('div').style.transform='translateY(16px)';
+        }
+        async function loadDashboard() {
+            const roomId = document.getElementById('dashboard-room-input')?.value?.trim();
+            if (!roomId) { showToastMsg('请输入班级房间ID'); return; }
+            try {
+                const [dashRes, sugRes] = await Promise.all([
+                    fetch(`/api/dashboard/${roomId}`),
+                    fetch(`/api/dashboard/${roomId}/suggestions`),
+                ]);
+                const data = await dashRes.json();
+                const sugData = await sugRes.json();
+                data.suggestions = sugData.suggestions || [];
+                renderDashboard(data);
+            } catch(e) { showToastMsg('加载失败，请检查房间ID'); }
+        }
+        function renderDashboard(data) {
+            const summary = data.summary || {};
+            const cards = document.getElementById('dashboard-summary-cards');
+            if (cards) cards.innerHTML = [
+                ['学生总数',data.member_count||0,'#3a2000'],
+                ['平均概念数',summary.avg_concepts||0,'#185FA5'],
+                ['平均引用次',summary.avg_citations||0,'#2ECC71'],
+                ['创作总件数',summary.total_creations||0,'#9B59B6'],
+                ['需关注',summary.stuck_count||0,'#E24B4A'],
+            ].map(([l,v,c])=>`<div class="dashboard-stat-card"><div class="dashboard-stat-num" style="color:${c}">${v}</div><div class="dashboard-stat-label">${l}</div></div>`).join('');
+
+            const heatmap = document.getElementById('dashboard-heatmap');
+            const cm = data.concept_heatmap || {};
+            if (heatmap) {
+                const maxVal = Math.max(1,...Object.values(cm));
+                heatmap.innerHTML = Object.entries(cm).sort((a,b)=>b[1]-a[1])
+                    .map(([c,n])=>`<span class="heatmap-cell" style="background:rgba(24,95,165,${(n/maxVal*0.75+0.25).toFixed(2)})">${c} ${n}人</span>`).join('')
+                    || '<span style="color:#bbb;font-size:0.8em;">暂无数据</span>';
+            }
+            const sw = document.getElementById('dashboard-students');
+            if (sw) sw.innerHTML = (data.snapshots||[]).map(s=>`
+                <div class="student-row ${s.is_stuck?'stuck':''}">
+                    <span class="student-name">${s.name}</span>
+                    <span class="student-stat">回合${s.rounds}</span>
+                    <span class="student-stat">概念${(s.concepts||[]).length}</span>
+                    <span class="student-stat">引用${s.citations}</span>
+                    <span class="student-stat">创作${s.creations}</span>
+                    <span style="font-size:0.75em;color:${s.is_stuck?'#E24B4A':'#2ECC71'};margin-left:auto;">
+                        ${s.is_stuck?'⚠️ '+s.stuck_reason:'✓ 正常'}</span>
+                </div>`).join('') || '<div style="color:#bbb;text-align:center;padding:12px;">暂无数据</div>';
+
+            const sugW = document.getElementById('dashboard-suggestions');
+            if (sugW && (data.suggestions||[]).length) sugW.innerHTML = `
+                <div style="font-size:0.78em;letter-spacing:2px;color:#a07830;margin-bottom:8px;">💡 教师建议</div>
+                ${data.suggestions.map(s=>`<div class="suggestion-card suggestion-${s.priority}">${s.message}</div>`).join('')}`;
+        }
+
+        /* ══ Phase 15C · 社区协作 ════════════════════════════ */
+
+        let _communityTab = 'choices';
+        async function showCommunity() {
+            const overlay = document.getElementById('community-overlay');
+            overlay.style.opacity='1'; overlay.style.pointerEvents='all';
+            overlay.querySelector('div').style.transform='translateY(0)';
+        }
+        function closeCommunityOverlay() {
+            const overlay = document.getElementById('community-overlay');
+            overlay.style.opacity='0'; overlay.style.pointerEvents='none';
+            overlay.querySelector('div').style.transform='translateY(16px)';
+        }
+        async function showCommunityTab(tab) {
+            _communityTab = tab;
+            ['choices','creations','causal'].forEach(t => {
+                const btn = document.getElementById(`tab-${t}`);
+                if (btn) btn.className = `comm-tab${t===tab?' active-tab':''}`;
+            });
+            const roomId = document.getElementById('community-room-input')?.value?.trim() || '';
+            const content = document.getElementById('community-content');
+            if (!roomId) { content.innerHTML='<div style="color:#bbb;text-align:center;padding:20px;">请输入班级房间ID</div>'; return; }
+            content.innerHTML = '<div style="color:#bbb;text-align:center;padding:20px;">加载中…</div>';
+            try {
+                if (tab==='choices') {
+                    const data = await (await fetch(`/api/community/${roomId}/choices`)).json();
+                    content.innerHTML = (data.choices||[]).map(c=>`
+                        <div style="background:rgba(200,168,74,0.07);border-radius:8px;padding:12px 14px;margin-bottom:10px;">
+                            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+                                <div style="font-size:0.88em;font-weight:600;color:#3a2000;">${c.choice}</div>
+                                <span style="font-size:0.75em;background:rgba(200,168,74,0.2);padding:2px 8px;border-radius:10px;color:#8a6200;">${c.count}人 · ${c.pct}%</span>
+                            </div>
+                            <div style="height:5px;background:rgba(200,168,74,0.12);border-radius:3px;margin-bottom:6px;">
+                                <div style="height:100%;background:#c8a84a;border-radius:3px;width:${c.pct}%;"></div>
+                            </div>
+                            <div style="font-size:0.72em;color:#a07830;">${(c.students||[]).slice(0,5).map(s=>s.name||s.user_id).join(' · ')}</div>
+                        </div>`).join('') || '<div style="color:#bbb;text-align:center;padding:20px;">暂无选择数据</div>';
+                } else if (tab==='creations') {
+                    const data = await (await fetch(`/api/community/${roomId}/creations`)).json();
+                    content.innerHTML = (data.creations||[]).map(c=>`
+                        <div style="background:rgba(200,168,74,0.07);border-radius:8px;padding:12px 14px;margin-bottom:10px;border-left:3px solid #c8a84a;">
+                            <div style="font-size:0.88em;font-weight:600;color:#3a2000;margin-bottom:5px;">${c.type||''} · ${c.title||'无题'}</div>
+                            <div style="font-size:0.82em;color:#5a3e1b;line-height:1.7;">${(c.draft||'').slice(0,120)}…</div>
+                        </div>`).join('') || '<div style="color:#bbb;text-align:center;padding:20px;">暂无公开创作</div>';
+                } else {
+                    const data = await (await fetch(`/api/community/${roomId}/causal_tree`)).json();
+                    const nodes=data.nodes||[], edges=data.edges||[];
+                    if (nodes.length<2) { content.innerHTML='<div style="color:#bbb;text-align:center;padding:20px;">需要更多学生参与后才能生成</div>'; return; }
+                    const W=620, rounds=[...new Set(nodes.map(n=>n.round))].sort((a,b)=>a-b);
+                    const np={};
+                    rounds.forEach((r,ri)=>{ const rn=nodes.filter(n=>n.round===r); rn.forEach((n,ni)=>{ np[n.id]={x:ri*(W/(rounds.length||1))+60, y:ni*80+50}; }); });
+                    const maxC=Math.max(1,...nodes.map(n=>n.count));
+                    let svg='';
+                    edges.forEach(e=>{ const s=np[e.source],t=np[e.target]; if(s&&t) svg+=`<line x1="${s.x}" y1="${s.y}" x2="${t.x}" y2="${t.y}" stroke="#c8a84a" stroke-width="${Math.max(1,e.weight*2)}" opacity="0.4"/>`; });
+                    nodes.forEach(n=>{ const pos=np[n.id]; if(!pos) return; const r=8+(n.count/maxC)*18; svg+=`<circle cx="${pos.x}" cy="${pos.y}" r="${r}" fill="${n.round===0?'#c8a84a':'#185FA5'}" opacity="0.8"/><text x="${pos.x}" y="${pos.y+r+14}" text-anchor="middle" font-size="9" fill="#5a3e1b">${(n.label||'').slice(0,10)}</text><text x="${pos.x}" y="${pos.y+4}" text-anchor="middle" font-size="9" fill="#fff">${n.count}</text>`; });
+                    content.innerHTML = `<svg width="100%" height="${Math.max(280,nodes.length*50)}" viewBox="0 0 ${W} ${Math.max(280,nodes.length*50)}" xmlns="http://www.w3.org/2000/svg" style="font-family:'Noto Serif SC',serif;">${svg}</svg>`;
+                }
+            } catch(e) { content.innerHTML='<div style="color:#E24B4A;text-align:center;padding:20px;">加载失败</div>'; }
+        }
+
+        /* ══ Phase 15D · 导出中心 ════════════════════════════ */
+
+        async function exportLessonPlan() {
+            if (!currentSessionId) { showToastMsg('请先开始一个时空会话'); return; }
+            const status = document.getElementById('export-status');
+            if (status) status.textContent = '生成教案中…';
+            try {
+                const res = await fetch(`/api/export/lesson_plan/${currentSessionId}`, {method:'POST'});
+                const data = await res.json();
+                downloadTextFile(data.markdown, `息壤教案_${data.era||'历史'}.md`);
+                if (status) status.textContent = '✅ 教案已下载';
+            } catch(e) { if (status) status.textContent = '❌ 生成失败'; }
+        }
+
+        async function exportStudentReport() {
+            if (!currentSessionId) { showToastMsg('请先开始一个时空会话'); return; }
+            const status = document.getElementById('export-status');
+            if (status) status.textContent = '生成报告中…';
+            try {
+                const uid = window._userId||'anonymous';
+                const res = await fetch(`/api/export/student_report/${currentSessionId}?user_id=${uid}&display_name=探索者`, {method:'POST'});
+                const data = await res.json();
+                downloadTextFile(data.markdown, '历史探究报告.md');
+                if (status) status.textContent = '✅ 报告已下载';
+            } catch(e) { if (status) status.textContent = '❌ 生成失败'; }
+        }
+
+        async function issueBadge() {
+            if (!currentSessionId) { showToastMsg('请先开始一个时空会话'); return; }
+            const status = document.getElementById('export-status');
+            try {
+                const uid = window._userId||'anonymous';
+                const res = await fetch(`/api/export/badge/${currentSessionId}?user_id=${uid}&display_name=探索者`, {method:'POST'});
+                const badge = await res.json();
+                downloadTextFile(JSON.stringify(badge,null,2), '探索成就徽章.json');
+                showToastMsg(`🏅 获得「${badge.badge?.name||'探索者徽章'}」！`);
+                if (status) status.textContent = `✅ 获得「${badge.badge?.name}」`;
+            } catch(e) { if (status) status.textContent = '❌ 颁发失败'; }
+        }
+
+        function downloadTextFile(content, filename) {
+            const blob = new Blob([content], {type:'text/plain;charset=utf-8'});
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href=url; a.download=filename;
+            document.body.appendChild(a); a.click();
+            document.body.removeChild(a); URL.revokeObjectURL(url);
+        }
+
         async function sendIntervention() {
             if (!currentSessionId) return;
             const input = document.getElementById('interventionInput');
@@ -2992,6 +3348,8 @@
                     setTimeout(loadRecommendedSources, 600);
                     // ── Phase 14B：自动加载跨学科连接点 ───────
                     setTimeout(loadCrossLinks, 1200);
+                    // ── Phase 15A：刷新地图推荐 ──────────────
+                    setTimeout(loadMapRecommend, 2000);
                 } else if (data.type === 'historical_echo') {
                     appendEchoCard(data.content);
                 } else if (data.type === 'choices_ready') {
@@ -4581,6 +4939,89 @@
         </div>
     </div>
 
+
+
+    <!-- Phase 15A · 学习地图覆盖层 -->
+    <div id="map-overlay" style="position:fixed;inset:0;background:rgba(5,2,0,0.85);z-index:10007;
+         display:flex;align-items:center;justify-content:center;opacity:0;pointer-events:none;transition:opacity 0.3s;">
+        <div id="map-modal" style="background:linear-gradient(160deg,#fdfaf3,#f0e8d0);border:1px solid #c8a84a;
+                    border-radius:14px;width:min(94vw,820px);max-height:88vh;display:flex;
+                    flex-direction:column;transform:scale(0.97);transition:transform 0.3s cubic-bezier(0.34,1.2,0.64,1);
+                    box-shadow:0 20px 60px rgba(0,0,0,0.4);overflow:hidden;">
+            <div style="display:flex;align-items:center;justify-content:space-between;
+                        padding:14px 22px;border-bottom:1px solid rgba(200,168,74,0.3);">
+                <span style="font-size:0.85em;letter-spacing:3px;color:#8a6200;">✦ 时 空 探 索 地 图 ✦</span>
+                <button onclick="closeMapOverlay()"
+                    style="background:transparent;border:none;color:#8a6200;font-size:1.2em;cursor:pointer;">✕</button>
+            </div>
+            <div style="padding:8px 16px;display:flex;gap:16px;font-size:0.72em;flex-wrap:wrap;border-bottom:1px solid rgba(200,168,74,0.15);">
+                <span>🟡 推荐探索</span><span>🟢 已探索</span><span style="color:#bbb;">⬚ 未解锁</span>
+                <span style="color:#185FA5;">— 前置关系</span><span style="color:#c8a84a;">- - 相关关系</span>
+            </div>
+            <div style="flex:1;overflow:auto;padding:20px;">
+                <svg id="map-svg" width="100%" height="460" xmlns="http://www.w3.org/2000/svg"
+                     style="font-family:'Noto Serif SC',serif;"></svg>
+            </div>
+            <div style="padding:12px 22px;border-top:1px solid rgba(200,168,74,0.2);">
+                <div style="font-size:0.78em;letter-spacing:2px;color:#a07830;margin-bottom:8px;">⭐ 为你推荐的下一站</div>
+                <div id="map-recommend-cards" style="display:flex;gap:10px;flex-wrap:wrap;"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Phase 15B · 教师驾驶舱覆盖层 -->
+    <div id="dashboard-overlay" style="position:fixed;inset:0;background:rgba(5,2,0,0.85);z-index:10008;
+         display:flex;align-items:center;justify-content:center;opacity:0;pointer-events:none;transition:opacity 0.3s;">
+        <div style="background:#fdfaf3;border:1px solid #c8a84a;border-radius:14px;
+                    width:min(96vw,900px);max-height:90vh;overflow-y:auto;padding:24px 28px;
+                    transform:translateY(16px);transition:transform 0.3s;box-shadow:0 20px 60px rgba(0,0,0,0.4);">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;">
+                <span style="font-size:0.9em;letter-spacing:3px;color:#8a6200;">✦ 教 师 驾 驶 舱 ✦</span>
+                <div style="display:flex;gap:8px;align-items:center;">
+                    <input id="dashboard-room-input" placeholder="班级房间ID"
+                        style="background:rgba(200,168,74,0.1);border:1px solid rgba(200,168,74,0.3);
+                               border-radius:4px;padding:4px 10px;font-size:0.8em;color:#3a2000;outline:none;width:140px;"/>
+                    <button onclick="loadDashboard()"
+                        style="background:rgba(200,168,74,0.15);border:1px solid #c8a84a;color:#5a3e1b;
+                               padding:4px 12px;border-radius:4px;cursor:pointer;font-size:0.8em;">查看</button>
+                    <button onclick="closeDashboardOverlay()"
+                        style="background:transparent;border:none;color:#8a6200;font-size:1.2em;cursor:pointer;">✕</button>
+                </div>
+            </div>
+            <div id="dashboard-summary-cards"
+                 style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;margin-bottom:18px;"></div>
+            <div style="font-size:0.78em;letter-spacing:2px;color:#a07830;margin-bottom:8px;">📊 大概念掌握热力图</div>
+            <div id="dashboard-heatmap" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:16px;min-height:36px;"></div>
+            <div style="font-size:0.78em;letter-spacing:2px;color:#a07830;margin-bottom:8px;">👥 班级学情</div>
+            <div id="dashboard-students" style="display:flex;flex-direction:column;gap:6px;margin-bottom:16px;"></div>
+            <div id="dashboard-suggestions"></div>
+        </div>
+    </div>
+
+    <!-- Phase 15C · 社区协作覆盖层 -->
+    <div id="community-overlay" style="position:fixed;inset:0;background:rgba(5,2,0,0.85);z-index:10009;
+         display:flex;align-items:center;justify-content:center;opacity:0;pointer-events:none;transition:opacity 0.3s;">
+        <div style="background:#fdfaf3;border:1px solid #c8a84a;border-radius:14px;
+                    width:min(94vw,760px);max-height:88vh;overflow-y:auto;padding:24px 28px;
+                    transform:translateY(16px);transition:transform 0.3s;box-shadow:0 20px 60px rgba(0,0,0,0.4);">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+                <span style="font-size:0.9em;letter-spacing:3px;color:#8a6200;">✦ 班 级 共 探 ✦</span>
+                <div style="display:flex;gap:8px;align-items:center;">
+                    <input id="community-room-input" placeholder="班级房间ID"
+                        style="background:rgba(200,168,74,0.1);border:1px solid rgba(200,168,74,0.3);
+                               border-radius:4px;padding:4px 10px;font-size:0.8em;color:#3a2000;outline:none;width:130px;"/>
+                    <button onclick="closeCommunityOverlay()"
+                        style="background:transparent;border:none;color:#8a6200;font-size:1.2em;cursor:pointer;">✕</button>
+                </div>
+            </div>
+            <div style="display:flex;gap:8px;margin-bottom:14px;border-bottom:1px solid rgba(200,168,74,0.2);padding-bottom:10px;flex-wrap:wrap;">
+                <button onclick="showCommunityTab('choices')" class="comm-tab active-tab" id="tab-choices">选择对比</button>
+                <button onclick="showCommunityTab('creations')" class="comm-tab" id="tab-creations">创作广场</button>
+                <button onclick="showCommunityTab('causal')" class="comm-tab" id="tab-causal">集体决策树</button>
+            </div>
+            <div id="community-content" style="min-height:200px;"></div>
+        </div>
+    </div>
 
     <div class="monologue-toast" id="monologue-toast">
         <div class="monologue-eyebrow">✦ 内 心 独 白 解 锁 ✦</div>

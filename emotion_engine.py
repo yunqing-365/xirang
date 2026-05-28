@@ -424,3 +424,6 @@ SUSHI_MONOLOGUES = [
         ),
     ),
 ]
+-e 
+# Phase 15B: 全局实例引用槽（由 server.py 启动时注入）
+_emotion_engine_global = None

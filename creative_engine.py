@@ -22,6 +22,7 @@ from enum import Enum
 from typing import Dict, List, Optional, AsyncGenerator
 
 from openai import AsyncOpenAI
+from infra.resilience import llm_guard, result_cache, annotation_cache, cross_link_cache, perspective_cache, graceful_degradation
 
 from config import get_settings
 
@@ -232,18 +233,25 @@ class CrossDisciplineEngine:
         """
         智能连接：先查预置库，不足则 LLM 补充。
         """
+        # 查缓存
+        _cache_key = ResultCache.make_key("cross", scene_desc[:50], era, str(scene_keywords))
+        _cached = await cross_link_cache.get(_cache_key)
+        if _cached is not None:
+            return _cached
+
         links = self.get_preset_links(scene_keywords or [])
         if len(links) < 2:
             llm_links = await self.generate_links(
                 scene_desc, era, dialogue_summary, focus_subjects
             )
-            # 合并，按学科去重
             existing_subjects = {l.subject for l in links}
             for ll in llm_links:
                 if ll.subject not in existing_subjects:
                     links.append(ll)
                     existing_subjects.add(ll.subject)
-        return [l.to_dict() for l in links[:5]]
+        result = [l.to_dict() for l in links[:5]]
+        await cross_link_cache.set(_cache_key, result)
+        return result
 
 
 # ════════════════════════════════════════════════════════════════

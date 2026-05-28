@@ -25,6 +25,7 @@ from enum import Enum
 from typing import Dict, List, Optional, Set
 
 from openai import AsyncOpenAI
+from infra.resilience import llm_guard, result_cache, annotation_cache, cross_link_cache, perspective_cache, graceful_degradation
 
 from config import get_settings
 from prompt_templates import _strip_code_fence_compat  # noqa – 若不存在则下方自定义
@@ -381,3 +382,6 @@ def _strip_json(text: str) -> str:
     if text.endswith("```"):
         text = text[:-3]
     return text.strip()
+-e 
+# Phase 15B: 全局实例引用槽（由 server.py 启动时注入）
+_concept_engine_global = None

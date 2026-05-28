@@ -26,6 +26,7 @@ from enum import Enum
 from typing import Dict, List, Optional, Tuple
 
 from openai import AsyncOpenAI
+from infra.resilience import llm_guard, result_cache, annotation_cache, cross_link_cache, perspective_cache, graceful_degradation
 
 from config import get_settings
 
@@ -131,6 +132,12 @@ class AnnotationEngine:
         if cache_key in self._cache:
             return self._cache[cache_key]
 
+        # 先查全局缓存
+        global_key = ResultCache.make_key("annotation", original_text[:80], era)
+        cached = await annotation_cache.get(global_key)
+        if cached is not None:
+            return cached
+
         prompt = (
             f"以下是一段{era}时期的{doc_type}原文：\n\n「{original_text[:300]}」\n\n"
             f"请识别其中需要注释的词汇（生僻字、典故、官制术语、地名、人名），"
@@ -142,13 +149,17 @@ class AnnotationEngine:
             f"最多返回8个最重要的词汇，不要注释常见字。"
         )
         try:
-            resp = await _client.chat.completions.create(
+            resp = await llm_guard.call(
+                _client.chat.completions.create,
                 model=_settings.MODEL_NAME,
                 messages=[{"role": "user", "content": prompt}],
                 temperature=0.2,
                 timeout=20,
                 max_tokens=600,
+                fallback=None,
             )
+            if resp is None:
+                return []
             raw = _strip_json(resp.choices[0].message.content)
             items = json.loads(raw)
             annotations = [
@@ -161,6 +172,7 @@ class AnnotationEngine:
                 for item in items
             ]
             self._cache[cache_key] = annotations
+            await annotation_cache.set(global_key, annotations)
             return annotations
         except Exception as e:
             print(f"⚠️ [注释引擎] 失败: {e}")

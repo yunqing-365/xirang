@@ -54,6 +54,12 @@ from creative_engine import (
     get_creative_session, CreationType, CrossDisciplineEngine,
     CreativeSession,
 )
+# Phase 15A + 15B + 15C + 15D
+from learning_map import get_map_engine, _NODE_INDEX as _map_node_index
+from teacher_dashboard import get_dashboard, TeacherDashboard
+from community_engine import get_community_hub, get_curriculum_exporter
+# 生产加固
+from infra.resilience import llm_guard, result_cache, annotation_cache, cross_link_cache, perspective_cache, get_resilience_status
 
 _settings = get_settings()
 _narrative_engine = NarrativeEngine()
@@ -61,6 +67,12 @@ _reflection_engine = ReflectionEngine()
 # Phase 12A + 12B: 全局情绪引擎和概念引擎（每个会话共享，按 session_id 隔离状态）
 _emotion_engine = EmotionEngine()
 _concept_engine = ConceptEngine()
+
+# Phase 15B：将全局实例注入各模块的全局引用变量（供 teacher_dashboard 跨模块读取）
+import concept_engine as _ce_mod
+import emotion_engine as _ee_mod
+_ce_mod._concept_engine_global = _concept_engine
+_ee_mod._emotion_engine_global = _emotion_engine
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -273,6 +285,17 @@ async def submit_choice(req: ChoiceRequest):
             chosen.text, manager.scene_desc, alt_choices,
             ns.rounds, choice_node_id,
         ))
+
+    # ── Phase 15C：记录选择到社区 Hub（若在班级中）──────────
+    for hub in list(get_community_hub.__globals__.get('_community_hubs', {}).values()):
+        if req.session_id in hub._choice_records or True:  # 广播到所有 Hub
+            hub.record_choice(
+                user_id=session_user_id,
+                display_name=session_user_id[:8],
+                round_num=ns.rounds,
+                choice_text=chosen.text,
+            )
+            break  # 只记录到第一个 Hub
 
     return {"status": "success", "directive": directive, "causal_node_id": choice_node_id}
 
@@ -1793,6 +1816,255 @@ async def get_share_card(session_id: str, creation_id: str):
     if not creation:
         raise HTTPException(status_code=404, detail="创作不存在")
     return cs.engine.build_share_card_data(creation)
+
+
+
+# ════════════════════════════════════════════════════════════════
+# Phase 15A · 学习路径图谱 API
+# ════════════════════════════════════════════════════════════════
+
+@app.get("/api/map/{user_id}")
+async def get_learning_map(user_id: str):
+    """获取用户的个性化学习地图（所有节点 + 探索状态 + 推荐）"""
+    profile = await asyncio.to_thread(profile_store.load, user_id)
+    engine = get_map_engine()
+    return engine.get_map_data(profile)
+
+
+@app.get("/api/map/recommend/{user_id}")
+async def get_recommendations(user_id: str, n: int = 3):
+    """获取个性化推荐的下一步时空节点"""
+    profile = await asyncio.to_thread(profile_store.load, user_id)
+    engine = get_map_engine()
+    nodes = engine.recommend(profile, n=n)
+    return {"recommended": [nd.to_dict() for nd in nodes]}
+
+
+@app.get("/api/map/node/{node_id}")
+async def get_node_detail(node_id: str):
+    """获取单个学习节点详情"""
+    node = _map_node_index.get(node_id)
+    if not node:
+        raise HTTPException(status_code=404, detail="节点不存在")
+    return node.to_dict()
+
+
+# ════════════════════════════════════════════════════════════════
+# Phase 15B · 教师驾驶舱 API
+# ════════════════════════════════════════════════════════════════
+
+@app.get("/api/dashboard/{room_id}")
+async def get_dashboard_overview(room_id: str, teacher_id: str = Query(default="")):
+    """获取班级整体概览（热力图 + 卡点 + 情绪分布）"""
+    room = _classrooms.get(room_id)
+    if not room:
+        raise HTTPException(status_code=404, detail="班级不存在")
+    dashboard = get_dashboard(room_id, room.get("teacher_id", teacher_id))
+    # 同步成员列表
+    for uid, role in room.get("members", {}).items():
+        dashboard.register_member(uid, room.get("session_id", ""), uid[:8])
+    return dashboard.get_class_overview()
+
+
+@app.get("/api/dashboard/{room_id}/student/{user_id}")
+async def get_student_detail(room_id: str, user_id: str):
+    """获取单个学生详细状态"""
+    dashboard = get_dashboard(room_id)
+    return dashboard.get_student_detail(user_id)
+
+
+@app.get("/api/dashboard/{room_id}/suggestions")
+async def get_intervention_suggestions(room_id: str):
+    """获取教师干预建议"""
+    dashboard = get_dashboard(room_id)
+    return {"suggestions": dashboard.suggest_intervention()}
+
+
+# ════════════════════════════════════════════════════════════════
+# Phase 15C · 社区协作 API
+# ════════════════════════════════════════════════════════════════
+
+@app.get("/api/community/{room_id}/choices")
+async def get_choices_comparison(room_id: str, round_num: int = Query(default=None)):
+    """获取全班选择对比"""
+    hub = get_community_hub(room_id)
+    return hub.get_choices_comparison(round_num)
+
+
+@app.get("/api/community/{room_id}/causal_tree")
+async def get_collective_causal_tree(room_id: str):
+    """获取班级集体因果决策树"""
+    hub = get_community_hub(room_id)
+    return hub.get_collective_causal_tree()
+
+
+class PublishCreationRequest(BaseModel):
+    room_id: str
+    session_id: str
+    creation_id: str
+    user_id: str = "anonymous"
+
+
+@app.post("/api/community/publish")
+async def publish_creation_to_community(req: PublishCreationRequest):
+    """将创作发布到班级社区"""
+    cs = get_creative_session(req.session_id, req.user_id)
+    creation = cs.get_creation(req.creation_id)
+    if not creation:
+        raise HTTPException(status_code=404, detail="创作不存在")
+    hub = get_community_hub(req.room_id)
+    hub.publish_creation(creation.to_dict(), req.user_id)
+    return {"status": "published", "creation_id": req.creation_id}
+
+
+@app.get("/api/community/{room_id}/creations")
+async def get_public_creations(room_id: str):
+    """获取班级社区公开的创作列表"""
+    hub = get_community_hub(room_id)
+    return {"creations": hub.get_public_creations()}
+
+
+class CommentRequest(BaseModel):
+    room_id: str
+    creation_id: str
+    author_id: str
+    author_name: str = ""
+    content: str
+    anonymous: bool = False
+
+
+@app.post("/api/community/comment")
+async def add_comment(req: CommentRequest):
+    """给创作添加评论"""
+    hub = get_community_hub(req.room_id)
+    comment = hub.add_comment(
+        req.creation_id, req.author_id,
+        req.author_name or req.author_id[:8],
+        req.content, req.anonymous,
+    )
+    return comment.to_dict()
+
+
+@app.get("/api/community/{room_id}/comments/{creation_id}")
+async def get_comments(room_id: str, creation_id: str):
+    """获取某创作的评论"""
+    hub = get_community_hub(room_id)
+    return {"comments": hub.get_comments(creation_id)}
+
+
+# ════════════════════════════════════════════════════════════════
+# Phase 15D · 课程包 & 认证 API
+# ════════════════════════════════════════════════════════════════
+
+@app.post("/api/export/lesson_plan/{session_id}")
+async def export_lesson_plan(session_id: str, duration: int = Query(default=45)):
+    """生成教案（Markdown）"""
+    data = await _get_session(session_id)
+    manager: ScenarioManager = data["manager"]
+    era = getattr(manager.world_env, "era", "宋代")
+
+    # 聚合本会话数据
+    tracker = _concept_engine._trackers.get(session_id)
+    concepts = [c.value for c in tracker.active_concepts] if tracker else []
+    cs = get_creative_session(session_id)
+    cross_links = await cs.get_cross_links(manager.scene_desc, era, manager.current_dialogue[-200:])
+    ie = get_inquiry_engine(session_id)
+    questions = [q.to_dict() for q in ie._current_questions]
+
+    exporter = get_curriculum_exporter()
+    markdown = await exporter.generate_lesson_plan(
+        era, manager.scene_desc, concepts, cross_links, questions, duration,
+    )
+    return {"markdown": markdown, "era": era, "concepts": concepts}
+
+
+@app.post("/api/export/student_report/{session_id}")
+async def export_student_report(
+    session_id: str,
+    user_id: str = Query(default="anonymous"),
+    display_name: str = Query(default="同学"),
+):
+    """生成学生历史探究报告"""
+    # 聚合各引擎数据
+    tracker = _concept_engine._trackers.get(session_id)
+    concepts = [c.value for c in tracker.active_concepts] if tracker else []
+
+    ie = get_inquiry_engine(session_id)
+    ws = get_workshop(session_id)
+    cs = get_creative_session(session_id, user_id)
+
+    session_summary = {
+        "concepts": concepts,
+        "citations_count": len(ws.citation_tracker.citations),
+        "evidence_score": ws.citation_tracker.total_evidence_score,
+        "socratic_turns": len(ie.socratic.turns),
+        "bookmarked": len(ie.notebook.bookmarks),
+        "creations_count": len(cs.creations),
+    }
+    exporter = get_curriculum_exporter()
+    report_md = await exporter.generate_student_report(
+        user_id, display_name, session_summary, {}
+    )
+    return {"markdown": report_md, "data": session_summary}
+
+
+@app.post("/api/export/badge/{session_id}")
+async def issue_badge(
+    session_id: str,
+    user_id: str = Query(default="anonymous"),
+    display_name: str = Query(default="探索者"),
+):
+    """颁发探索成就徽章"""
+    data = await _get_session(session_id)
+    manager: ScenarioManager = data["manager"]
+    era = getattr(manager.world_env, "era", "历史")
+
+    tracker = _concept_engine._trackers.get(session_id)
+    concepts = [c.value for c in tracker.active_concepts] if tracker else []
+    ws = get_workshop(session_id)
+    ie = get_inquiry_engine(session_id)
+
+    achievements = []
+    if concepts:
+        achievements.append(f"触碰历史学大概念：{', '.join(concepts[:3])}")
+    if ws.citation_tracker.citations:
+        achievements.append(f"引用史料 {len(ws.citation_tracker.citations)} 次")
+    if ie.notebook.bookmarks:
+        achievements.append(f"收藏探究问题 {len(ie.notebook.bookmarks)} 道")
+
+    exporter = get_curriculum_exporter()
+    badge = exporter.generate_badge(user_id, display_name, era, achievements)
+    return badge
+
+
+
+# ════════════════════════════════════════════════════════════════
+# 生产加固 · 弹性状态 API
+# ════════════════════════════════════════════════════════════════
+
+@app.get("/api/resilience/status")
+async def get_resilience_api_status():
+    """返回 LLM 熔断器状态 + 各缓存命中率（运维监控用）"""
+    return await get_resilience_status()
+
+
+@app.post("/api/resilience/cache/clear")
+async def clear_caches(cache: str = Query(default="all")):
+    """手动清空指定缓存（开发调试用）"""
+    targets = {
+        "result": result_cache,
+        "annotation": annotation_cache,
+        "cross": cross_link_cache,
+        "perspective": perspective_cache,
+    }
+    if cache == "all":
+        for c in targets.values():
+            await c.clear()
+        return {"cleared": list(targets.keys())}
+    if cache not in targets:
+        raise HTTPException(status_code=400, detail=f"未知缓存名: {cache}")
+    await targets[cache].clear()
+    return {"cleared": [cache]}
 
 
 if __name__ == "__main__":

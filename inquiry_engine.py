@@ -27,6 +27,7 @@ from enum import IntEnum
 from typing import AsyncGenerator, Dict, List, Optional
 
 from openai import AsyncOpenAI
+from infra.resilience import llm_guard, result_cache, annotation_cache, cross_link_cache, perspective_cache, graceful_degradation
 
 from config import get_settings
 

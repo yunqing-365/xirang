@@ -23,6 +23,7 @@ from enum import Enum
 from typing import Dict, List, Optional, Tuple
 
 from openai import AsyncOpenAI
+from infra.resilience import llm_guard, result_cache, annotation_cache, cross_link_cache, perspective_cache, graceful_degradation
 
 from config import get_settings
 
@@ -248,6 +249,12 @@ class MultiPerspectiveMap:
             else f"请自行选取{n}个在{scene_era}时代与此事件最相关的不同身份"
         )
 
+        # 查缓存
+        _cache_key = ResultCache.make_key("perspective", event_desc[:60], scene_era)
+        _cached = await perspective_cache.get(_cache_key)
+        if _cached is not None:
+            return _cached
+
         prompt = (
             f"历史事件：{event_desc[:300]}\n"
             f"时代背景：{scene_era}\n"
@@ -261,16 +268,20 @@ class MultiPerspectiveMap:
             '"key_concern": "最关心的是（10字以内）"}'
         )
         try:
-            resp = await _client.chat.completions.create(
+            resp = await llm_guard.call(
+                _client.chat.completions.create,
                 model=_settings.MODEL_NAME,
                 messages=[{"role": "user", "content": prompt}],
                 temperature=0.8,
                 timeout=25,
                 max_tokens=800,
+                fallback=None,
             )
+            if resp is None:
+                return []
             raw = _strip_json(resp.choices[0].message.content)
             items = json.loads(raw)
-            return [
+            views = [
                 PerspectiveView(
                     identity=item["identity"],
                     stance=item.get("stance", ""),
@@ -280,6 +291,8 @@ class MultiPerspectiveMap:
                 )
                 for item in items
             ]
+            await perspective_cache.set(_cache_key, views)
+            return views
         except Exception as e:
             print(f"⚠️ [多视角] 生成失败: {e}")
             return []
