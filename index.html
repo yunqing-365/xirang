@@ -288,6 +288,139 @@
         .btn-resume { background-color:#2C3E50; }
         .btn-resume:hover { background-color:#1a252f; }
 
+
+        /* ══════════════════════════════════════════════════
+           新人引导系统
+        ══════════════════════════════════════════════════ */
+
+        /* 欢迎弹窗 */
+        #onboard-welcome {
+            position: fixed; inset: 0; z-index: 9000;
+            background: rgba(0,0,0,.72);
+            display: flex; align-items: center; justify-content: center;
+            backdrop-filter: blur(4px);
+        }
+        #onboard-welcome.hidden { display:none; }
+        .ob-modal {
+            background: #1a1008;
+            border: 1px solid #c8a84a;
+            border-radius: 16px;
+            width: 580px; max-width: 92vw;
+            padding: 40px 44px 36px;
+            box-shadow: 0 24px 80px rgba(0,0,0,.6);
+            position: relative;
+        }
+        .ob-logo { font-size: 2.2em; font-weight: 700; color: #c8a84a; letter-spacing: .12em; margin-bottom: 6px; }
+        .ob-tagline { color: #8a7050; font-size: .88em; margin-bottom: 28px; letter-spacing: .06em; }
+        .ob-modal h2 { color: #f0e0b0; font-size: 1.35em; margin-bottom: 14px; }
+        .ob-modal p  { color: #9a8060; font-size: .9em; line-height: 1.7; margin-bottom: 20px; }
+        .ob-features {
+            display: grid; grid-template-columns: 1fr 1fr;
+            gap: 10px; margin-bottom: 28px;
+        }
+        .ob-feat {
+            background: rgba(200,168,74,.06);
+            border: 1px solid rgba(200,168,74,.18);
+            border-radius: 8px; padding: 12px 14px;
+        }
+        .ob-feat-icon { font-size: 1.4em; margin-bottom: 5px; }
+        .ob-feat-title { color: #c8a84a; font-size: .85em; font-weight: 600; margin-bottom: 3px; }
+        .ob-feat-desc  { color: #7a6845; font-size: .78em; line-height: 1.5; }
+        .ob-btn-row { display: flex; gap: 12px; justify-content: flex-end; align-items: center; }
+        .ob-btn-skip { background: none; border: none; color: #5a4832; font-size: .85em; cursor: pointer; padding: 8px 12px; }
+        .ob-btn-skip:hover { color: #8a6842; }
+        .ob-btn-start {
+            background: linear-gradient(135deg, #c8a84a, #a07830);
+            color: #1a1008; border: none; border-radius: 8px;
+            padding: 11px 28px; font-size: .95em; font-weight: 700;
+            cursor: pointer; letter-spacing: .04em; transition: opacity .15s;
+        }
+        .ob-btn-start:hover { opacity: .88; }
+        .ob-step-dots { display:flex; gap:6px; align-items:center; margin-right:auto; }
+        .ob-dot { width:7px; height:7px; border-radius:50%; background:rgba(200,168,74,.25); transition:.2s; }
+        .ob-dot.active { background:#c8a84a; transform:scale(1.2); }
+
+        /* 功能高亮遮罩 */
+        #ob-spotlight {
+            position: fixed; inset: 0; z-index: 8500;
+            pointer-events: none;
+        }
+        #ob-spotlight.hidden { display:none; }
+        #ob-spotlight svg { position: absolute; inset:0; width:100%; height:100%; }
+
+        /* 步骤气泡 */
+        #ob-bubble {
+            position: fixed; z-index: 8600;
+            background: #1a1008;
+            border: 1px solid #c8a84a;
+            border-radius: 12px;
+            width: 300px;
+            padding: 18px 20px 16px;
+            box-shadow: 0 8px 40px rgba(0,0,0,.55);
+            transition: all .25s ease;
+        }
+        #ob-bubble.hidden { display:none; }
+        #ob-bubble::before {
+            content:''; position:absolute;
+            width:10px; height:10px;
+            background:#1a1008; border:1px solid #c8a84a;
+            transform: rotate(45deg);
+        }
+        #ob-bubble.arrow-top::before    { top:-6px; left:28px; border-bottom:none; border-right:none; }
+        #ob-bubble.arrow-bottom::before { bottom:-6px; left:28px; border-top:none; border-left:none; }
+        #ob-bubble.arrow-left::before   { left:-6px; top:20px; border-right:none; border-bottom:none; }
+        .ob-bubble-step { color:#c8a84a; font-size:.72em; letter-spacing:.08em; margin-bottom:6px; }
+        .ob-bubble-title{ color:#f0e0b0; font-size:.95em; font-weight:600; margin-bottom:6px; }
+        .ob-bubble-desc { color:#8a7050; font-size:.82em; line-height:1.6; margin-bottom:14px; }
+        .ob-bubble-nav  { display:flex; justify-content:space-between; align-items:center; }
+        .ob-bubble-prev { background:none; border:1px solid rgba(200,168,74,.3); color:#8a7050; border-radius:6px; padding:5px 12px; font-size:.8em; cursor:pointer; }
+        .ob-bubble-next { background: linear-gradient(135deg,#c8a84a,#a07830); color:#1a1008; border:none; border-radius:6px; padding:6px 14px; font-size:.82em; font-weight:700; cursor:pointer; }
+        .ob-bubble-close{ background:none; border:none; color:#5a4832; font-size:.8em; cursor:pointer; }
+
+        /* 帮助入口按钮（右下角） */
+        #ob-help-btn {
+            position: fixed; bottom: 24px; right: 24px; z-index: 7000;
+            width: 44px; height: 44px; border-radius: 50%;
+            background: linear-gradient(135deg,#c8a84a,#a07830);
+            border: none; color: #1a1008; font-size: 1.2em; font-weight: 700;
+            cursor: pointer; box-shadow: 0 4px 16px rgba(0,0,0,.4);
+            transition: transform .15s;
+        }
+        #ob-help-btn:hover { transform: scale(1.1); }
+
+
+        .scene-preset-card {
+            background: linear-gradient(135deg, #fdf6e3, #f5e6c8);
+            border: 1px solid var(--border-gold);
+            border-radius: 8px;
+            padding: 12px 14px;
+            cursor: pointer;
+            transition: all 0.22s;
+            position: relative;
+            overflow: hidden;
+        }
+        .scene-preset-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(139,29,29,0.18);
+            border-color: var(--accent-red);
+        }
+        .scene-preset-card::before {
+            content:''; position:absolute; top:0; left:0; right:0; height:3px;
+            background: linear-gradient(90deg, var(--accent-red), #c8a84a);
+        }
+        .sp-era {
+            font-size: 0.68em; font-weight: 700; letter-spacing: .12em;
+            color: var(--accent-red); margin-bottom: 4px; text-transform: uppercase;
+        }
+        .sp-title { font-size: 0.95em; font-weight: 700; color: #2c1810; margin-bottom: 5px; }
+        .sp-desc  { font-size: 0.78em; color: #6b5040; line-height: 1.5; margin-bottom: 6px; }
+        .sp-agents{
+            font-size: 0.72em; color: #8a7050;
+            border-top: 1px dashed #c8a84a; padding-top: 5px; margin-top: 4px;
+        }
+        .scene-preset-card.loading { opacity:.6; pointer-events:none; }
+
+
         @keyframes fadeIn { to { opacity:1; transform:translateY(0); } }
         @keyframes pulse { 0%{opacity:0.5;} 50%{opacity:1;} 100%{opacity:0.5;} }
         @keyframes blink { 50%{opacity:0;} }
@@ -1368,7 +1501,42 @@
 
     <div class="creation-panel" id="creationPanel">
         <h3>🌌 开辟新时空</h3>
-        <p style="color:#777;font-size:0.9em;margin-bottom:20px;">输入主题与风格，大模型将为您动态生成世界观、环境与NPC网络。</p>
+
+        <!-- ── 预置历史场景选择器 ── -->
+        <div id="preset-scenarios-wrap" style="margin-bottom:22px;">
+            <p style="color:#8a7050;font-size:0.85em;margin-bottom:10px;letter-spacing:.05em;">✦ 精选历史场景（即点即入）</p>
+            <div id="scenario-cards" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px;">
+                <!-- 静态兜底，JS加载后替换 -->
+                <div class="scene-preset-card" onclick="usePreset('北宋元丰三年，黄州临皋亭雪夜','历史客观写实','song')">
+                    <div class="sp-era">北宋</div>
+                    <div class="sp-title">苏轼·黄州夜话</div>
+                    <div class="sp-desc">贬谪黄州，雪夜创作《临皋雪夜图》</div>
+                    <div class="sp-agents">苏轼 · 佛印 · 王朝云</div>
+                </div>
+                <div class="scene-preset-card" onclick="usePreset('唐天宝十四年，安史之乱前夜','历史客观写实','tang_anshi')">
+                    <div class="sp-era">唐</div>
+                    <div class="sp-title">安史前夜·平乱策议</div>
+                    <div class="sp-desc">叛军已破居庸关，翰林院彻夜未眠</div>
+                    <div class="sp-agents">杜甫 · 高适 · 王维</div>
+                </div>
+                <div class="scene-preset-card" onclick="usePreset('明崇祯十七年，甲申国变前夕','宫廷权谋/政治','ming_jiashen')">
+                    <div class="sp-era">明末</div>
+                    <div class="sp-title">甲申之变·最后廷议</div>
+                    <div class="sp-desc">距城破72小时，南迁还是死守？</div>
+                    <div class="sp-agents">魏藻德 · 李明睿 · 张缙彦</div>
+                </div>
+                <div class="scene-preset-card" onclick="usePreset('清光绪二十四年，戊戌变法第八十日','历史客观写实','qing_wuxu')">
+                    <div class="sp-era">晚清</div>
+                    <div class="sp-title">戊戌变法·第八十日</div>
+                    <div class="sp-desc">变法之速与守旧之力的最后博弈</div>
+                    <div class="sp-agents">康有为 · 谭嗣同 · 梁启超</div>
+                </div>
+            </div>
+        </div>
+
+        <hr style="border:none;border-top:1px dashed var(--border-gold);margin:18px auto;width:70%;">
+        <h3>🎲 动态创世</h3>
+        <p style="color:#777;font-size:0.9em;margin-bottom:16px;">输入主题与风格，大模型将为您动态生成世界观、环境与NPC网络。</p>
         <div style="margin-bottom:25px;">
             <input type="text" id="worldThemeInput" placeholder="主题，如：明朝万历年间，江南茶馆..." style="width:40%;">
             <select id="worldGenreInput">
@@ -2906,8 +3074,52 @@
             if (e.target === this) closeReflection();
         });
 
+        /* ══ 预置场景 ══════════════════════════════════════════ */
+        function usePreset(theme, genre, eraKey) {
+            document.getElementById('worldThemeInput').value = theme;
+            document.getElementById('worldGenreInput').value = genre;
+            // 高亮选中卡片
+            document.querySelectorAll('.scene-preset-card').forEach(c => c.classList.remove('selected'));
+            event.currentTarget.classList.add('selected');
+            // 直接触发创世
+            createNewWorld(eraKey);
+        }
+
+        async function loadScenariosFromAPI() {
+            try {
+                const res = await fetch('/api/scenarios');
+                if (!res.ok) return;
+                const data = await res.json();
+                const container = document.getElementById('scenario-cards');
+                const ERA_LABELS = {
+                    song:'北宋', tang_anshi:'唐', ming_jiashen:'明末',
+                    qing_wuxu:'晚清', default:'历史'
+                };
+                const ERA_DESCS = {
+                    song: '苏轼·黄州夜话', tang_anshi: '安史前夜·平乱策议',
+                    ming_jiashen: '甲申之变·最后廷议', qing_wuxu: '戊戌变法·第八十日'
+                };
+                container.innerHTML = data.scenarios.map(s => {
+                    const era_label = ERA_LABELS[s.era_key] || s.era_key;
+                    const title = ERA_DESCS[s.era_key] || s.era;
+                    const agents = (s.agents || []).join(' · ') || '角色生成中';
+                    const desc = (s.scene_desc || '').slice(0, 28) + '…';
+                    const genre = s.era_key === 'ming_jiashen' ? '宫廷权谋/政治' : '历史客观写实';
+                    const theme = s.era;
+                    return `<div class="scene-preset-card" onclick="usePreset('${theme}','${genre}','${s.era_key}')">
+                        <div class="sp-era">${era_label}</div>
+                        <div class="sp-title">${title}</div>
+                        <div class="sp-desc">${desc}</div>
+                        <div class="sp-agents">${agents}</div>
+                    </div>`;
+                }).join('');
+            } catch(e) {
+                console.log('场景列表加载失败，使用静态卡片', e);
+            }
+        }
+
         /* ══ 世界创建 & 恢复 ══════════════════════════════════ */
-        async function createNewWorld() {
+        async function createNewWorld(eraKey) {
             const theme = document.getElementById('worldThemeInput').value.trim();
             const genre = document.getElementById('worldGenreInput').value;
             const btn = document.getElementById('createWorldBtn');
@@ -2916,19 +3128,27 @@
             btn.disabled = true;
             statusDiv.innerText = "🌌 正在连接高维大模型进行世界推演，请耐心等待（约 10-20 秒）...";
             try {
+                const body = { theme, genre };
+                if (eraKey) body.era_key = eraKey;
                 const res = await fetch('/api/create_world', {
                     method:'POST', headers:{'Content-Type':'application/json'},
-                    body: JSON.stringify({theme, genre})
+                    body: JSON.stringify(body)
                 });
                 const data = await res.json();
+                if (res.status === 402) {
+                    statusDiv.innerHTML = '❌ 免费次数已用完。<a href="/api/payment/plans" target="_blank" style="color:var(--accent-red)">查看升级方案 →</a>';
+                    btn.disabled = false; return;
+                }
                 if (data.status === "success") {
                     currentSessionId = data.session_id;
                     if (data.world_mood) applyMood(data.world_mood);
                     enterWorldMode();
                     initWorldUI(data);
                     refreshProfile();
+                    if (data.quota && data.quota.plan === 'free' && data.quota.sessions_remaining <= 1)
+                        showToastMsg('⚠️ 免费体验还剩 ' + data.quota.sessions_remaining + ' 次，升级订阅继续探究');
                 } else {
-                    statusDiv.innerText = "❌ 创世失败：" + data.message;
+                    statusDiv.innerText = "❌ 创世失败：" + (data.detail || data.message || '未知错误');
                     btn.disabled = false;
                 }
             } catch(e) {
@@ -5281,5 +5501,146 @@
         </div>
     </div>
 
+
+<!-- ══ 新人引导：欢迎弹窗 ══ -->
+<div id="onboard-welcome" class="hidden">
+  <div class="ob-modal">
+    <div class="ob-logo">息　壤</div>
+    <div class="ob-tagline">AI 历史沉浸探究平台</div>
+    <h2>欢迎初次进入时光长廊 ✦</h2>
+    <p>息壤是一个让历史「活起来」的探究平台。你将扮演真实历史人物，在重大历史节点中做出选择、引用史料、写下创作，留下属于你的历史印记。</p>
+    <div class="ob-features">
+      <div class="ob-feat"><div class="ob-feat-icon">🌌</div><div class="ob-feat-title">4 个历史场景</div><div class="ob-feat-desc">北宋·唐·明末·晚清，即点即入，也可自定义</div></div>
+      <div class="ob-feat"><div class="ob-feat-icon">🧠</div><div class="ob-feat-title">苏格拉底探究</div><div class="ob-feat-desc">AI 追问引导你深入思考历史因果，触碰大概念</div></div>
+      <div class="ob-feat"><div class="ob-feat-icon">📜</div><div class="ob-feat-title">史料引用</div><div class="ob-feat-desc">真实文献支撑对话，引用越多探究越深</div></div>
+      <div class="ob-feat"><div class="ob-feat-icon">🏆</div><div class="ob-feat-title">成就 & 报告</div><div class="ob-feat-desc">解锁成就徽章，生成 PDF 探究报告，可分享</div></div>
+    </div>
+    <div class="ob-btn-row">
+      <div class="ob-step-dots"><div class="ob-dot active" id="wd0"></div><div class="ob-dot" id="wd1"></div><div class="ob-dot" id="wd2"></div><div class="ob-dot" id="wd3"></div><div class="ob-dot" id="wd4"></div></div>
+      <button class="ob-btn-skip" onclick="obSkip()">跳过引导</button>
+      <button class="ob-btn-start" onclick="obStartTour()">开始引导 →</button>
+    </div>
+  </div>
+</div>
+
+<div id="ob-spotlight" class="hidden"><svg width="100%" height="100%"></svg></div>
+
+<div id="ob-bubble" class="hidden arrow-top">
+  <div class="ob-bubble-step" id="ob-step-label">步骤 1 / 5</div>
+  <div class="ob-bubble-title" id="ob-bubble-title"></div>
+  <div class="ob-bubble-desc"  id="ob-bubble-desc"></div>
+  <div class="ob-bubble-nav">
+    <button class="ob-bubble-prev" id="ob-prev-btn" onclick="obPrev()">← 上一步</button>
+    <button class="ob-bubble-close" onclick="obSkip()">结束引导</button>
+    <button class="ob-bubble-next" id="ob-next-btn" onclick="obNext()">下一步 →</button>
+  </div>
+</div>
+
+<button id="ob-help-btn" onclick="obRestart()" title="重看功能引导">？</button>
+
+<script>
+window.addEventListener('load', loadScenariosFromAPI);
+
+const OB_KEY = 'xirang_onboard_done_v1';
+let currentSessionId = typeof currentSessionId !== 'undefined' ? currentSessionId : '';
+
+const OB_STEPS = [
+  { title:'选择历史场景', desc:'点击任意场景卡片或在下方输入自定义主题，即可穿越到那个年代。推荐从「北宋·苏轼黄州夜话」开始！', selector:'#preset-scenarios-wrap', arrow:'top' },
+  { title:'进入场景后与历史人物对话', desc:'右侧对话框直接向苏轼、杜甫、康有为提问，他们会用符合历史的方式回应。试着问：「你为何做出这个选择？」', selector:'#chat-input-area', arrow:'bottom', waitForWorld:true },
+  { title:'苏格拉底追问 & 大概念', desc:'点击「探究」标签页，AI 会生成深度问题引导你思考因果关系、历史意义等大概念。每次触碰大概念都计入探究报告。', selector:'.tab-btn', arrow:'top', waitForWorld:true },
+  { title:'教师实况大屏', desc:'老师可访问 /teacher 打开大屏，实时看到学生触碰的概念、情绪和卡住情况，并发送插话提示引导全班探究方向。', selector:'#preset-scenarios-wrap', arrow:'top' },
+  { title:'成就系统 & PDF报告', desc:'每次探究自动解锁成就、更新排行榜。教师版可导出 PDF 探究报告，或生成微信分享卡片发给同学。', selector:'#preset-scenarios-wrap', arrow:'top' },
+];
+
+let obStep = 0;
+
+function obShow() {
+  if (!localStorage.getItem(OB_KEY)) {
+    document.getElementById('onboard-welcome').classList.remove('hidden');
+  }
+}
+
+function obStartTour() {
+  document.getElementById('onboard-welcome').classList.add('hidden');
+  obStep = 0;
+  obRender();
+}
+
+function obSkip() {
+  localStorage.setItem(OB_KEY, '1');
+  document.getElementById('onboard-welcome').classList.add('hidden');
+  document.getElementById('ob-spotlight').classList.add('hidden');
+  document.getElementById('ob-bubble').classList.add('hidden');
+}
+
+function obRestart() {
+  localStorage.removeItem(OB_KEY);
+  obStep = 0;
+  document.getElementById('onboard-welcome').classList.remove('hidden');
+}
+
+function obNext() {
+  obStep++;
+  if (obStep >= OB_STEPS.length) { obFinish(); return; }
+  // 跳过需要世界但还未进入的步骤
+  if (OB_STEPS[obStep].waitForWorld && !window.currentSessionId) { obNext(); return; }
+  obRender();
+}
+
+function obPrev() {
+  if (obStep > 0) obStep--;
+  obRender();
+}
+
+function obFinish() {
+  localStorage.setItem(OB_KEY, '1');
+  document.getElementById('ob-spotlight').classList.add('hidden');
+  document.getElementById('ob-bubble').classList.add('hidden');
+  if (typeof showToastMsg === 'function') showToastMsg('🎉 引导完成！点右下角 ？ 可重看');
+}
+
+function obRender() {
+  const step = OB_STEPS[obStep];
+  const bubble = document.getElementById('ob-bubble');
+  const spotlight = document.getElementById('ob-spotlight');
+
+  // 更新点点
+  document.querySelectorAll('.ob-dot').forEach((d,i) => d.classList.toggle('active', i===obStep));
+  document.getElementById('ob-step-label').textContent = `步骤 ${obStep+1} / ${OB_STEPS.length}`;
+  document.getElementById('ob-bubble-title').textContent = step.title;
+  document.getElementById('ob-bubble-desc').textContent  = step.desc;
+  document.getElementById('ob-prev-btn').style.visibility = obStep===0 ? 'hidden' : 'visible';
+  document.getElementById('ob-next-btn').textContent = obStep===OB_STEPS.length-1 ? '完成 ✓' : '下一步 →';
+  bubble.className = `ob-bubble arrow-${step.arrow||'top'}`;
+
+  const target = document.querySelector(step.selector);
+  if (target) {
+    const r = target.getBoundingClientRect();
+    spotlight.classList.remove('hidden');
+    bubble.classList.remove('hidden');
+    spotlight.innerHTML = `<svg width="100%" height="100%">
+      <defs><mask id="ob-mask">
+        <rect width="100%" height="100%" fill="white"/>
+        <rect x="${r.left-6}" y="${r.top-6}" width="${r.width+12}" height="${r.height+12}" rx="8" fill="black"/>
+      </mask></defs>
+      <rect width="100%" height="100%" fill="rgba(0,0,0,0.65)" mask="url(#ob-mask)"/>
+      <rect x="${r.left-6}" y="${r.top-6}" width="${r.width+12}" height="${r.height+12}" rx="8" fill="none" stroke="#c8a84a" stroke-width="2" opacity="0.9"/>
+    </svg>`;
+
+    const bw = 300;
+    let bx = Math.max(12, Math.min(r.left, window.innerWidth-bw-12));
+    let by = step.arrow==='bottom' ? r.top-180 : r.bottom+16;
+    by = Math.max(12, Math.min(by, window.innerHeight-180));
+    bubble.style.cssText = `left:${bx}px;top:${by}px;transform:none`;
+    target.scrollIntoView({behavior:'smooth', block:'nearest'});
+  } else {
+    spotlight.classList.add('hidden');
+    bubble.style.cssText = 'left:50%;top:50%;transform:translate(-50%,-50%)';
+    bubble.classList.remove('hidden');
+  }
+}
+
+setTimeout(obShow, 800);
+</script>
 </body>
 </html>

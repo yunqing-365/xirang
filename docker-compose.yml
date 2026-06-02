@@ -1,0 +1,100 @@
+services:
+
+  xirang:
+    build: .
+    image: xirang:latest
+    container_name: xirang_app
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      OPENAI_API_KEY: "${OPENAI_API_KEY}"
+      OPENAI_BASE_URL: "${OPENAI_BASE_URL:-https://api.openai.com/v1}"
+      XIRANG_MODEL: "${XIRANG_MODEL:-gpt-4o}"
+      DATABASE_URL: "postgresql+asyncpg://xirang:${DB_PASSWORD}@postgres:5432/xirang"
+      REDIS_URL: "redis://redis:6379/0"
+      XIRANG_JWT_SECRET: "${JWT_SECRET}"
+      XIRANG_AUTH_ENABLED: "true"
+      XIRANG_SMS_SANDBOX: "${SMS_SANDBOX:-true}"
+      XIRANG_PAYMENT_SANDBOX: "${PAYMENT_SANDBOX:-true}"
+      XIRANG_FREE_QUOTA: "3"
+      XIRANG_CORS_ORIGINS: "${XIRANG_CORS_ORIGINS:-http://localhost:8000}"
+      XIRANG_DATA_DIR: "/app/data"
+      TZ: "Asia/Shanghai"
+    volumes:
+      - xirang_data:/app/data
+      - xirang_fonts:/app/assets/fonts
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: xirang_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: xirang
+      POSTGRES_USER: xirang
+      POSTGRES_PASSWORD: "${DB_PASSWORD}"
+      TZ: "Asia/Shanghai"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./deploy/sql:/docker-entrypoint-initdb.d:ro
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U xirang -d xirang"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: xirang_redis
+    restart: unless-stopped
+    command: >
+      redis-server
+      --maxmemory 256mb
+      --maxmemory-policy allkeys-lru
+      --save 60 1
+      --appendonly yes
+    volumes:
+      - redis_data:/data
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  nginx:
+    image: nginx:1.27-alpine
+    container_name: xirang_nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./deploy/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./deploy/nginx/certs:/etc/nginx/certs:ro
+    depends_on:
+      - xirang
+
+volumes:
+  xirang_data:
+  xirang_fonts:
+  postgres_data:
+  redis_data:
+
+networks:
+  default:
+    name: xirang_net
