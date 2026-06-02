@@ -93,7 +93,7 @@ services:
       PGDATA:            /var/lib/postgresql/data/pgdata
     volumes:
       - postgres-data:/var/lib/postgresql/data
-      - ../deploy/sql/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+      - ../deploy/sql/init_full.sql:/docker-entrypoint-initdb.d/init_full.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U xirang -d xirang"]
       interval: 10s
@@ -155,9 +155,19 @@ services:
       - "443:443"
     volumes:
       - ../deploy/nginx.conf:/etc/nginx/conf.d/default.conf:ro
-      - nginx-certs:/etc/nginx/certs
+      # 证书目录：开发时挂载 ./certs/，生产时 certbot 写入后自动生效
+      - ../deploy/certs:/etc/nginx/certs:ro
+      # Let's Encrypt ACME 验证目录（certbot webroot 模式）
+      - ../deploy/certbot-webroot:/var/www/certbot:ro
+      # Let's Encrypt 证书存储
+      - ../deploy/certs/letsencrypt:/etc/letsencrypt:ro
     depends_on:
       - app
+    healthcheck:
+      test: ["CMD", "nginx", "-t"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
     networks:
       - xirang-net
 
@@ -167,7 +177,6 @@ volumes:
   postgres-data:
   prometheus-data:
   grafana-data:
-  nginx-certs:
 
 networks:
   xirang-net:

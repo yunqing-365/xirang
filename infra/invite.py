@@ -1,27 +1,22 @@
 # infra/invite.py
 """
-息壤班级码 / 邀请码系统（P0）
+息壤班级码 / 邀请码系统（P0 - 已升级：持久化到 PostgreSQL）
 =====================================
 两种码：
   1. 班级码（class_code）：教师创建，6位大写字母，学生扫码加入班级
   2. 邀请码（invite_code）：管理员生成，8位，发给教师用于激活专业版
 
-班级码功能：
-  - 教师创建班级 → 生成6位班级码
-  - 学生用班级码加入 → 自动绑定到教师的会话/班级
-  - 教师实时看到班级成员列表
-  - 班级码默认有效期：7天（可续期）
-
-邀请码功能：
-  - 管理员批量生成
-  - 一次性使用，用后作废
-  - 激活指定套餐（teacher_pro / student / school）
+存储策略：
+  - USE_POSTGRES=True：读写 classrooms / classroom_members / invite_codes 表
+  - 内存回退：开发/单机模式
 """
 from __future__ import annotations
 
+import logging
 import random
 import string
 import time
+import uuid
 from dataclasses import dataclass, field
 from typing import Optional
 
@@ -31,20 +26,26 @@ from pydantic import BaseModel
 from infra.auth import TokenData, get_current_user, require_teacher, require_admin
 from infra.quota import upgrade_plan, get_quota_status
 
+_log = logging.getLogger(__name__)
+
+from config import get_settings
+_settings = get_settings()
+USE_POSTGRES: bool = getattr(_settings, "USE_POSTGRES", False)
+
 # ─────────────────────────────────────────────────────────────────
 # 数据结构
 # ─────────────────────────────────────────────────────────────────
 
 @dataclass
 class ClassRoom:
-    class_code: str           # 6位大写，对外展示
-    room_id: str              # 内部ID，对应 server.py 的 _classrooms
+    class_code: str
+    room_id: str
     teacher_id: str
     class_name: str
-    era: str                  # 绑定的历史场景
+    era: str
     created_at: float = field(default_factory=time.time)
-    expires_at: float = 0.0   # 0=永不过期
-    members: dict[str, dict] = field(default_factory=dict)   # user_id → info
+    expires_at: float = 0.0
+    members: dict[str, dict] = field(default_factory=dict)
     is_active: bool = True
 
     @property
@@ -70,10 +71,10 @@ class ClassRoom:
 
 @dataclass
 class InviteCode:
-    code: str                 # 8位字母+数字
-    plan: str                 # 激活的套餐
-    duration_days: int        # 订阅时长
-    created_by: str           # admin user_id
+    code: str
+    plan: str
+    duration_days: int
+    created_by: str
     created_at: float = field(default_factory=time.time)
     expires_at: float = 0.0
     used_by: Optional[str] = None
@@ -106,78 +107,285 @@ class InviteCode:
 
 
 # ─────────────────────────────────────────────────────────────────
-# 内存存储（生产替换为 PostgreSQL）
+# 内存回退（开发模式）
 # ─────────────────────────────────────────────────────────────────
 
-_classrooms: dict[str, ClassRoom] = {}          # class_code → ClassRoom
-_classrooms_by_teacher: dict[str, list[str]] = {}  # teacher_id → [class_code]
-_invite_codes: dict[str, InviteCode] = {}       # code → InviteCode
+_classrooms: dict[str, ClassRoom] = {}
+_classrooms_by_teacher: dict[str, list[str]] = {}
+_invite_codes: dict[str, InviteCode] = {}
+
+# ─────────────────────────────────────────────────────────────────
+# PostgreSQL 持久化层
+# ─────────────────────────────────────────────────────────────────
+
+_db_pool = None
+
+async def _get_pool():
+    global _db_pool
+    if _db_pool is None and USE_POSTGRES:
+        try:
+            import asyncpg
+            _db_pool = await asyncpg.create_pool(_settings.DB_URL, min_size=2, max_size=10)
+            _log.info("✅ invite: PostgreSQL 连接池已建立")
+        except Exception as e:
+            _log.error(f"❌ invite: PostgreSQL 连接失败，回退内存: {e}")
+    return _db_pool
+
+
+# ── 班级 DB 操作 ──────────────────────────────────────────────────
+
+async def _db_create_classroom(classroom: ClassRoom):
+    pool = await _get_pool()
+    if not pool:
+        _classrooms[classroom.class_code] = classroom
+        _classrooms_by_teacher.setdefault(classroom.teacher_id, []).append(classroom.class_code)
+        return
+    from datetime import datetime, timezone
+    expires_dt = (
+        datetime.fromtimestamp(classroom.expires_at, tz=timezone.utc)
+        if classroom.expires_at > 0 else None
+    )
+    async with pool.acquire() as conn:
+        await conn.execute(
+            """
+            INSERT INTO classrooms (teacher_id, class_code, class_name, era, expires_at, is_active)
+            VALUES ($1, $2, $3, $4, $5, TRUE)
+            ON CONFLICT (class_code) DO NOTHING
+            """,
+            classroom.teacher_id, classroom.class_code,
+            classroom.class_name, classroom.era, expires_dt
+        )
+
+
+async def _db_get_classroom(class_code: str) -> Optional[ClassRoom]:
+    pool = await _get_pool()
+    if not pool:
+        return _classrooms.get(class_code)
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            "SELECT * FROM classrooms WHERE class_code = $1", class_code
+        )
+        if not row:
+            return None
+        # 加载成员
+        members_rows = await conn.fetch(
+            "SELECT user_id, display_name, role, EXTRACT(EPOCH FROM joined_at) as joined_ts "
+            "FROM classroom_members WHERE class_code = $1", class_code
+        )
+        members = {
+            r["user_id"]: {
+                "user_id": r["user_id"],
+                "display_name": r["display_name"],
+                "role": r["role"],
+                "joined_at": float(r["joined_ts"] or 0),
+            }
+            for r in members_rows
+        }
+        expires_ts = float(row["expires_at"].timestamp()) if row.get("expires_at") else 0.0
+        created_ts = float(row["created_at"].timestamp()) if row.get("created_at") else time.time()
+        return ClassRoom(
+            class_code=row["class_code"],
+            room_id=f"room_{row['class_code'].lower()}",
+            teacher_id=row["teacher_id"],
+            class_name=row["class_name"] or "",
+            era=row["era"] or "北宋·熙宁变法",
+            created_at=created_ts,
+            expires_at=expires_ts,
+            members=members,
+            is_active=row["is_active"],
+        )
+
+
+async def _db_join_classroom(class_code: str, user_id: str, display_name: str):
+    pool = await _get_pool()
+    if not pool:
+        return
+    async with pool.acquire() as conn:
+        await conn.execute(
+            """
+            INSERT INTO classroom_members (class_code, user_id, display_name, role)
+            VALUES ($1, $2, $3, 'student')
+            ON CONFLICT (class_code, user_id) DO UPDATE
+              SET display_name = EXCLUDED.display_name
+            """,
+            class_code, user_id, display_name or user_id
+        )
+
+
+async def _db_teacher_classrooms(teacher_id: str) -> list[ClassRoom]:
+    pool = await _get_pool()
+    if not pool:
+        codes = _classrooms_by_teacher.get(teacher_id, [])
+        return [_classrooms[c] for c in codes if c in _classrooms]
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            "SELECT class_code FROM classrooms WHERE teacher_id = $1 ORDER BY created_at DESC",
+            teacher_id
+        )
+        result = []
+        for r in rows:
+            c = await _db_get_classroom(r["class_code"])
+            if c:
+                result.append(c)
+        return result
+
+
+async def _db_close_classroom(class_code: str, teacher_id: str):
+    pool = await _get_pool()
+    if not pool:
+        c = _classrooms.get(class_code)
+        if c:
+            c.is_active = False
+        return
+    async with pool.acquire() as conn:
+        result = await conn.execute(
+            "UPDATE classrooms SET is_active = FALSE WHERE class_code = $1 AND teacher_id = $2",
+            class_code, teacher_id
+        )
+        if result == "UPDATE 0":
+            raise PermissionError("只有班级创建者可以关闭班级")
+
+
+# ── 邀请码 DB 操作 ──────────────────────────────────────────────
+
+async def _db_save_invite(invite: InviteCode):
+    pool = await _get_pool()
+    if not pool:
+        _invite_codes[invite.code] = invite
+        return
+    from datetime import datetime, timezone
+    expires_dt = (
+        datetime.fromtimestamp(invite.expires_at, tz=timezone.utc)
+        if invite.expires_at > 0 else None
+    )
+    async with pool.acquire() as conn:
+        await conn.execute(
+            """
+            INSERT INTO invite_codes (code, plan, duration_days, created_by, expires_at)
+            VALUES ($1, $2, $3, $4, $5)
+            ON CONFLICT (code) DO NOTHING
+            """,
+            invite.code, invite.plan, invite.duration_days, invite.created_by, expires_dt
+        )
+
+
+async def _db_get_invite(code: str) -> Optional[InviteCode]:
+    pool = await _get_pool()
+    if not pool:
+        return _invite_codes.get(code)
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow("SELECT * FROM invite_codes WHERE code = $1", code)
+        if not row:
+            return None
+        return InviteCode(
+            code=row["code"],
+            plan=row["plan"],
+            duration_days=row["duration_days"],
+            created_by=row["created_by"],
+            created_at=float(row["created_at"].timestamp()) if row.get("created_at") else time.time(),
+            expires_at=float(row["expires_at"].timestamp()) if row.get("expires_at") else 0.0,
+            used_by=row["used_by"],
+            used_at=float(row["used_at"].timestamp()) if row.get("used_at") else None,
+        )
+
+
+async def _db_redeem_invite(code: str, user_id: str) -> InviteCode:
+    pool = await _get_pool()
+    if not pool:
+        invite = _invite_codes.get(code)
+        if invite:
+            invite.used_by = user_id
+            invite.used_at = time.time()
+        return invite
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            """
+            UPDATE invite_codes
+            SET used_by = $1, used_at = NOW()
+            WHERE code = $2 AND used_by IS NULL
+              AND (expires_at IS NULL OR expires_at > NOW())
+            RETURNING *
+            """,
+            user_id, code
+        )
+        if not row:
+            raise ValueError("邀请码无效、已过期或已被使用")
+        return InviteCode(
+            code=row["code"], plan=row["plan"], duration_days=row["duration_days"],
+            created_by=row["created_by"], used_by=row["used_by"],
+            used_at=float(row["used_at"].timestamp()) if row.get("used_at") else None,
+        )
+
+
+async def _db_list_invites() -> list[InviteCode]:
+    pool = await _get_pool()
+    if not pool:
+        return list(_invite_codes.values())
+    async with pool.acquire() as conn:
+        rows = await conn.fetch("SELECT * FROM invite_codes ORDER BY created_at DESC")
+        return [
+            InviteCode(
+                code=r["code"], plan=r["plan"], duration_days=r["duration_days"],
+                created_by=r["created_by"],
+                expires_at=float(r["expires_at"].timestamp()) if r.get("expires_at") else 0.0,
+                used_by=r["used_by"],
+            )
+            for r in rows
+        ]
 
 
 # ─────────────────────────────────────────────────────────────────
 # 生成函数
 # ─────────────────────────────────────────────────────────────────
 
+_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"  # 去掉易混淆字符
+
 def _gen_class_code() -> str:
-    """生成唯一6位大写字母班级码，排除易混淆字符"""
-    chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"  # 去掉 I O 0 1
-    for _ in range(20):  # 重试最多20次
-        code = "".join(random.choices(chars, k=6))
+    for _ in range(30):
+        code = "".join(random.choices(_CHARS, k=6))
         if code not in _classrooms:
             return code
-    raise RuntimeError("无法生成唯一班级码，请联系管理员")
+    raise RuntimeError("无法生成唯一班级码")
 
 
 def _gen_invite_code() -> str:
     chars = string.ascii_uppercase + string.digits
-    for _ in range(20):
+    for _ in range(30):
         code = "".join(random.choices(chars, k=8))
         if code not in _invite_codes:
             return code
     raise RuntimeError("无法生成唯一邀请码")
 
 
-def _gen_room_id() -> str:
-    import uuid
-    return "room_" + uuid.uuid4().hex[:8]
-
-
 # ─────────────────────────────────────────────────────────────────
-# 业务逻辑
+# 业务逻辑（异步化）
 # ─────────────────────────────────────────────────────────────────
 
-def create_classroom(
-    teacher_id: str,
-    class_name: str,
-    era: str = "北宋·熙宁变法",
-    expire_days: int = 0,    # 0=永不过期
+async def create_classroom(
+    teacher_id: str, class_name: str,
+    era: str = "北宋·熙宁变法", expire_days: int = 0,
 ) -> ClassRoom:
     code = _gen_class_code()
-    room_id = _gen_room_id()
+    room_id = "room_" + uuid.uuid4().hex[:8]
     expires_at = (time.time() + expire_days * 86400) if expire_days > 0 else 0.0
     classroom = ClassRoom(
-        class_code=code,
-        room_id=room_id,
-        teacher_id=teacher_id,
-        class_name=class_name,
-        era=era,
-        expires_at=expires_at,
+        class_code=code, room_id=room_id, teacher_id=teacher_id,
+        class_name=class_name, era=era, expires_at=expires_at,
     )
-    _classrooms[code] = classroom
-    _classrooms_by_teacher.setdefault(teacher_id, []).append(code)
+    await _db_create_classroom(classroom)
     return classroom
 
 
-def join_classroom(class_code: str, user_id: str, display_name: str = "") -> ClassRoom:
-    """学生用班级码加入班级"""
+async def join_classroom(class_code: str, user_id: str, display_name: str = "") -> ClassRoom:
     code = class_code.upper().strip()
-    classroom = _classrooms.get(code)
+    classroom = await _db_get_classroom(code)
     if not classroom:
         raise ValueError(f"班级码 {code} 不存在")
     if classroom.is_expired:
         raise ValueError(f"班级码 {code} 已过期，请联系老师刷新")
     if not classroom.is_active:
-        raise ValueError(f"该班级已关闭")
+        raise ValueError("该班级已关闭")
+    await _db_join_classroom(code, user_id, display_name)
     classroom.members[user_id] = {
         "user_id": user_id,
         "display_name": display_name or user_id,
@@ -187,63 +395,48 @@ def join_classroom(class_code: str, user_id: str, display_name: str = "") -> Cla
     return classroom
 
 
-def get_classroom_by_code(class_code: str) -> Optional[ClassRoom]:
-    return _classrooms.get(class_code.upper().strip())
+async def get_classroom_by_code(class_code: str) -> Optional[ClassRoom]:
+    return await _db_get_classroom(class_code.upper().strip())
 
 
-def get_teacher_classrooms(teacher_id: str) -> list[ClassRoom]:
-    codes = _classrooms_by_teacher.get(teacher_id, [])
-    return [_classrooms[c] for c in codes if c in _classrooms]
+async def get_teacher_classrooms(teacher_id: str) -> list[ClassRoom]:
+    return await _db_teacher_classrooms(teacher_id)
 
 
-def close_classroom(class_code: str, teacher_id: str) -> ClassRoom:
-    classroom = _classrooms.get(class_code.upper())
+async def close_classroom(class_code: str, teacher_id: str) -> ClassRoom:
+    await _db_close_classroom(class_code.upper(), teacher_id)
+    classroom = await _db_get_classroom(class_code.upper())
     if not classroom:
         raise ValueError("班级码不存在")
-    if classroom.teacher_id != teacher_id:
-        raise PermissionError("只有班级创建者可以关闭班级")
     classroom.is_active = False
     return classroom
 
 
-# ── 邀请码 ──────────────────────────────────────────────────────
-
-def create_invite_codes(
-    admin_id: str,
-    plan: str,
-    count: int = 1,
-    duration_days: int = 365,
-    expire_days: int = 30,  # 邀请码本身的有效期
+async def create_invite_codes(
+    admin_id: str, plan: str, count: int = 1,
+    duration_days: int = 365, expire_days: int = 30,
 ) -> list[InviteCode]:
     codes = []
     expires_at = time.time() + expire_days * 86400
     for _ in range(count):
         code = _gen_invite_code()
         invite = InviteCode(
-            code=code,
-            plan=plan,
-            duration_days=duration_days,
-            created_by=admin_id,
-            expires_at=expires_at,
+            code=code, plan=plan, duration_days=duration_days,
+            created_by=admin_id, expires_at=expires_at,
         )
-        _invite_codes[code] = invite
+        await _db_save_invite(invite)
         codes.append(invite)
     return codes
 
 
-def redeem_invite_code(code: str, user_id: str) -> InviteCode:
-    """兑换邀请码，激活对应套餐"""
-    invite = _invite_codes.get(code.upper().strip())
+async def redeem_invite_code(code: str, user_id: str) -> InviteCode:
+    invite = await _db_get_invite(code.upper().strip())
     if not invite:
         raise ValueError(f"邀请码 {code} 不存在")
     if not invite.is_valid:
-        if invite.is_used:
-            raise ValueError("该邀请码已被使用")
-        raise ValueError("该邀请码已过期")
-    invite.used_by = user_id
-    invite.used_at = time.time()
-    # 激活套餐
-    upgrade_plan(user_id, invite.plan, duration_days=invite.duration_days)
+        raise ValueError("该邀请码已被使用或已过期")
+    invite = await _db_redeem_invite(code.upper().strip(), user_id)
+    await upgrade_plan(user_id, invite.plan, duration_days=invite.duration_days)
     return invite
 
 
@@ -266,19 +459,15 @@ class JoinClassRequest(BaseModel):
     display_name: str = ""
 
 
-# ── 班级码接口 ───────────────────────────────────────────────────
-
 @invite_router.post("/create")
 async def api_create_classroom(
     req: CreateClassRequest,
     token: TokenData = Depends(require_teacher),
 ):
     """教师创建班级，返回6位班级码"""
-    classroom = create_classroom(
-        teacher_id=token.user_id,
-        class_name=req.class_name,
-        era=req.era,
-        expire_days=req.expire_days,
+    classroom = await create_classroom(
+        teacher_id=token.user_id, class_name=req.class_name,
+        era=req.era, expire_days=req.expire_days,
     )
     return {
         "success": True,
@@ -297,7 +486,7 @@ async def api_join_classroom(
 ):
     """学生用班级码加入班级"""
     try:
-        classroom = join_classroom(req.class_code, token.user_id, req.display_name)
+        classroom = await join_classroom(req.class_code, token.user_id, req.display_name)
     except (ValueError, PermissionError) as e:
         raise HTTPException(status_code=400, detail=str(e))
     return {
@@ -314,7 +503,7 @@ async def api_join_classroom(
 @invite_router.get("/my_classes")
 async def api_my_classrooms(token: TokenData = Depends(require_teacher)):
     """教师查看自己的所有班级"""
-    classrooms = get_teacher_classrooms(token.user_id)
+    classrooms = await get_teacher_classrooms(token.user_id)
     return {"classrooms": [c.to_dict() for c in classrooms]}
 
 
@@ -323,7 +512,7 @@ async def api_classroom_info(
     class_code: str,
     token: TokenData = Depends(get_current_user),
 ):
-    classroom = get_classroom_by_code(class_code)
+    classroom = await get_classroom_by_code(class_code)
     if not classroom:
         raise HTTPException(status_code=404, detail="班级码不存在")
     return classroom.to_dict()
@@ -335,7 +524,7 @@ async def api_close_classroom(
     token: TokenData = Depends(require_teacher),
 ):
     try:
-        classroom = close_classroom(class_code, token.user_id)
+        classroom = await close_classroom(class_code, token.user_id)
     except (ValueError, PermissionError) as e:
         raise HTTPException(status_code=400, detail=str(e))
     return {"success": True, "message": f"班级 {class_code} 已关闭"}
@@ -362,18 +551,11 @@ async def api_generate_invite(
     """管理员批量生成邀请码"""
     if req.count > 100:
         raise HTTPException(status_code=400, detail="单次最多生成100个邀请码")
-    codes = create_invite_codes(
-        admin_id=token.user_id,
-        plan=req.plan,
-        count=req.count,
-        duration_days=req.duration_days,
-        expire_days=req.expire_days,
+    codes = await create_invite_codes(
+        admin_id=token.user_id, plan=req.plan, count=req.count,
+        duration_days=req.duration_days, expire_days=req.expire_days,
     )
-    return {
-        "success": True,
-        "count": len(codes),
-        "codes": [c.to_dict() for c in codes],
-    }
+    return {"success": True, "count": len(codes), "codes": [c.to_dict() for c in codes]}
 
 
 @invite_code_router.post("/redeem")
@@ -383,7 +565,7 @@ async def api_redeem_invite(
 ):
     """用户兑换邀请码激活套餐"""
     try:
-        invite = redeem_invite_code(req.code, token.user_id)
+        invite = await redeem_invite_code(req.code, token.user_id)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     quota = get_quota_status(token.user_id)
@@ -399,9 +581,10 @@ async def api_redeem_invite(
 @invite_code_router.get("/list")
 async def api_list_invite_codes(token: TokenData = Depends(require_admin)):
     """管理员查看所有邀请码"""
+    codes = await _db_list_invites()
     return {
-        "total": len(_invite_codes),
-        "valid": sum(1 for c in _invite_codes.values() if c.is_valid),
-        "used": sum(1 for c in _invite_codes.values() if c.is_used),
-        "codes": [c.to_dict() for c in _invite_codes.values()],
+        "total": len(codes),
+        "valid": sum(1 for c in codes if c.is_valid),
+        "used": sum(1 for c in codes if c.is_used),
+        "codes": [c.to_dict() for c in codes],
     }

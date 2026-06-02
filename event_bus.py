@@ -19,7 +19,7 @@ import asyncio
 import time
 from dataclasses import dataclass, field
 from enum import Enum, auto
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Coroutine, Dict, List, Optional
 from collections import defaultdict
 
 
@@ -91,7 +91,7 @@ class Event:
 # 事件总线核心
 # ═══════════════════════════════════════════════════════════════
 
-AsyncHandler = Callable[[Event], asyncio.coroutine]
+AsyncHandler = Callable[[Event], Coroutine[Any, Any, None]]
 
 
 class EventBus:

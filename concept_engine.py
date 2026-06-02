@@ -382,6 +382,6 @@ def _strip_json(text: str) -> str:
     if text.endswith("```"):
         text = text[:-3]
     return text.strip()
--e 
+
 # Phase 15B: 全局实例引用槽（由 server.py 启动时注入）
 _concept_engine_global = None

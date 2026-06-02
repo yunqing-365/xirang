@@ -61,6 +61,14 @@ from community_engine import get_community_hub, get_curriculum_exporter
 # 生产加固
 from infra.resilience import llm_guard, result_cache, annotation_cache, cross_link_cache, perspective_cache, get_resilience_status
 
+# P0 变现模块
+from infra.sms_auth import sms_router
+from infra.wechat_auth import wechat_router
+from infra.quota import quota_router
+from infra.payment import payment_router
+from infra.invite import invite_router, invite_code_router
+from infra.report_pdf import pdf_router
+
 _settings = get_settings()
 _narrative_engine = NarrativeEngine()
 _reflection_engine = ReflectionEngine()
@@ -93,18 +101,53 @@ async def lifespan(app: FastAPI):
     bus.subscribe(EventType.SESSION_EXPIRED,   _on_session_expired)
     await bus.emit(Event(EventType.WORLD_CREATED, session_id="system",
                          payload={"msg": "息壤引擎启动"}))
+    # DB 连接验证
+    if _settings.USE_POSTGRES:
+        try:
+            import asyncpg
+            _pool = await asyncpg.connect(_settings.DB_URL)
+            await _pool.execute("SELECT 1")
+            await _pool.close()
+            print("✅ PostgreSQL 连接正常")
+        except Exception as e:
+            print(f"⚠️  PostgreSQL 连接失败（将使用内存模式）: {e}")
+    if _settings.USE_REDIS:
+        try:
+            import redis.asyncio as aioredis
+            _r = aioredis.from_url(_settings.REDIS_URL, decode_responses=True)
+            await _r.ping()
+            await _r.aclose()
+            print("✅ Redis 连接正常")
+        except Exception as e:
+            print(f"⚠️  Redis 连接失败（将使用内存模式）: {e}")
     print("🚀 息壤 v2.1 启动，访问 http://localhost:8000")
     yield
     print("🌙 息壤引擎休眠…")
 
 
 app = FastAPI(title="息壤", version="2.1.0", lifespan=lifespan)
-app.add_middleware(CORSMiddleware, allow_origins=["*"],
-                   allow_methods=["*"], allow_headers=["*"])
+# CORS：从配置读取允许的来源，生产环境通过 XIRANG_CORS_ORIGINS 环境变量设置
+# 示例：XIRANG_CORS_ORIGINS=https://xirang.ai,https://www.xirang.ai
+_cors_origins = _settings.CORS_ORIGINS if hasattr(_settings, "CORS_ORIGINS") else ["*"]
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=_cors_origins,
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type", "X-API-Key"],
+    allow_credentials=True,
+)
 app.mount("/images", StaticFiles(directory="data/raw_documents"), name="images")
 
 # 注册鉴权路由和可观测性
 app.include_router(auth_router)
+# P0 变现路由
+app.include_router(sms_router)
+app.include_router(wechat_router)
+app.include_router(quota_router)
+app.include_router(payment_router)
+app.include_router(invite_router)
+app.include_router(invite_code_router)
+app.include_router(pdf_router)
 setup_observability(app)
 
 

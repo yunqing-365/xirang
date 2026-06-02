@@ -221,7 +221,9 @@ cmd_status() {
     fi
 }
 
-# ── 生成 SSL 自签证书（开发用）──────────────────────────────
+# ── SSL 证书管理 ─────────────────────────────────────────────
+
+# 生成自签证书（开发/局域网测试用）
 cmd_ssl() {
     local cert_dir="$SCRIPT_DIR/certs"
     mkdir -p "$cert_dir"
@@ -231,7 +233,73 @@ cmd_ssl() {
         -out "$cert_dir/fullchain.pem" \
         -subj "/C=CN/ST=Beijing/L=Beijing/O=Xirang/CN=localhost" 2>/dev/null
     success "证书已生成: $cert_dir/"
-    warn "生产环境请使用 Let's Encrypt 或正式 CA 证书"
+    warn "生产环境请用: ./start.sh certbot <your-domain.com> <your@email.com>"
+}
+
+# Let's Encrypt 自动申请/续期（生产用）
+# 用法：./deploy/start.sh certbot <域名> <邮箱>
+# 示例：./deploy/start.sh certbot xirang.ai admin@xirang.ai
+cmd_certbot() {
+    local domain="${1:-}"
+    local email="${2:-}"
+
+    if [ -z "$domain" ] || [ -z "$email" ]; then
+        error "用法: ./start.sh certbot <域名> <邮箱>\n示例: ./start.sh certbot xirang.ai admin@xirang.ai"
+        exit 1
+    fi
+
+    info "申请 Let's Encrypt 证书: $domain"
+
+    # 确保 certbot webroot 目录存在
+    mkdir -p "$SCRIPT_DIR/certbot-webroot/.well-known/acme-challenge"
+
+    # 启动 nginx（提供 ACME 验证路径）
+    if ! docker_compose ps nginx 2>/dev/null | grep -q "running"; then
+        info "启动 Nginx 以完成域名验证..."
+        docker_compose up -d nginx
+        sleep 3
+    fi
+
+    # 用 certbot docker 申请证书
+    docker run --rm \
+        -v "$SCRIPT_DIR/certs/letsencrypt:/etc/letsencrypt" \
+        -v "$SCRIPT_DIR/certbot-webroot:/var/www/certbot" \
+        certbot/certbot certonly \
+        --webroot --webroot-path=/var/www/certbot \
+        --email "$email" --agree-tos --no-eff-email \
+        -d "$domain" -d "www.$domain" 2>&1
+
+    if [ $? -eq 0 ]; then
+        # 将证书软链接到 Nginx 期望的位置
+        local cert_dir="$SCRIPT_DIR/certs"
+        mkdir -p "$cert_dir"
+        ln -sf "/etc/letsencrypt/live/$domain/fullchain.pem" "$cert_dir/fullchain.pem"
+        ln -sf "/etc/letsencrypt/live/$domain/privkey.pem"   "$cert_dir/privkey.pem"
+        success "证书申请成功！域名: $domain"
+        info "重启 Nginx 使证书生效..."
+        docker_compose restart nginx
+        success "HTTPS 已启用：https://$domain"
+    else
+        error "证书申请失败，请检查：\n  1. 域名 DNS 已解析到本服务器 IP\n  2. 80 端口已开放\n  3. 邮箱地址正确"
+        exit 1
+    fi
+}
+
+# Let's Encrypt 自动续期（建议加入 crontab）
+# crontab 示例：0 3 * * 0 /path/to/deploy/start.sh certbot-renew
+cmd_certbot_renew() {
+    info "检查并续期 Let's Encrypt 证书..."
+    docker run --rm \
+        -v "$SCRIPT_DIR/certs/letsencrypt:/etc/letsencrypt" \
+        -v "$SCRIPT_DIR/certbot-webroot:/var/www/certbot" \
+        certbot/certbot renew --quiet 2>&1
+
+    if [ $? -eq 0 ]; then
+        docker_compose restart nginx
+        success "证书续期检查完成"
+    else
+        warn "证书续期失败或未到续期时间（Let's Encrypt 证书剩余30天内才会续期）"
+    fi
 }
 
 # ── 入口 ──────────────────────────────────────────────────────
@@ -247,7 +315,9 @@ case "$CMD" in
     migrate)  cmd_migrate ;;
     backup)   cmd_backup ;;
     status)   cmd_status ;;
-    ssl)      cmd_ssl ;;
+    ssl)            cmd_ssl ;;
+    certbot)        cmd_certbot "$@" ;;
+    certbot-renew)  cmd_certbot_renew ;;
     help|*)
         banner
         echo "用法: ./deploy/start.sh <命令> [参数]"
@@ -261,7 +331,9 @@ case "$CMD" in
         echo "  migrate               运行数据库迁移"
         echo "  backup                备份数据"
         echo "  status                查看运行状态"
-        echo "  ssl                   生成自签 SSL 证书（开发用）"
+        echo "  ssl                   生成自签 SSL 证书（开发用）
+  certbot <domain> <email>  申请 Let's Encrypt 证书（生产用）
+  certbot-renew         续期 Let's Encrypt 证书（建议加入 crontab）"
         echo ""
         echo "快速开始:"
         echo "  cp .env.example .env && vim .env"

@@ -1,22 +1,20 @@
 # infra/quota.py
 """
-息壤使用配额模块（P0）
+息壤使用配额模块（P0 - 已修复：配额数据持久化至 PostgreSQL/Redis）
 =====================================
 免费用户：每月3次完整会话
 教师专业版：无限
 学生月度版：无限
 学校版：按班级配额
 
-配额状态存储：
-  - 开发/单机：内存 dict（重启清零，无所谓）
-  - 生产：Redis INCR + EXPIRE（原子操作，跨进程安全）
-
-快速使用：
-    from infra.quota import quota_check, quota_consume, get_quota_status
+存储策略：
+  - 生产（USE_POSTGRES=True）：读写 user_quota 表，月度滚动
+  - 开发（内存回退）：重启清零，仅用于测试
 """
 from __future__ import annotations
 
 import json
+import logging
 import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -28,6 +26,9 @@ from infra.auth import TokenData, get_current_user
 from config import get_settings
 
 _settings = get_settings()
+_log = logging.getLogger(__name__)
+
+USE_POSTGRES: bool = getattr(_settings, "USE_POSTGRES", False)
 
 # ─────────────────────────────────────────────────────────────────
 # 套餐定义
@@ -40,7 +41,7 @@ class Plan:
     monthly_messages: int        # -1 = 无限
     price_monthly: int           # 分（人民币）
     price_yearly: int
-    max_class_size: int = 0      # 教师版专属
+    max_class_size: int = 0
     can_export_pdf: bool = False
     can_view_dashboard: bool = False
 
@@ -56,15 +57,15 @@ PLANS: dict[str, Plan] = {
         name="学生版",
         monthly_sessions=-1,
         monthly_messages=-1,
-        price_monthly=3900,    # ¥39
-        price_yearly=29900,    # ¥299
+        price_monthly=3900,
+        price_yearly=29900,
     ),
     "teacher_pro": Plan(
         name="教师专业版",
         monthly_sessions=-1,
         monthly_messages=-1,
-        price_monthly=19900,   # ¥199
-        price_yearly=159900,   # ¥1599
+        price_monthly=19900,
+        price_yearly=159900,
         max_class_size=60,
         can_export_pdf=True,
         can_view_dashboard=True,
@@ -73,8 +74,8 @@ PLANS: dict[str, Plan] = {
         name="学校版",
         monthly_sessions=-1,
         monthly_messages=-1,
-        price_monthly=0,       # 按年签合同
-        price_yearly=800000,   # ¥8000
+        price_monthly=0,
+        price_yearly=800000,
         max_class_size=500,
         can_export_pdf=True,
         can_view_dashboard=True,
@@ -90,12 +91,9 @@ PLANS: dict[str, Plan] = {
 class QuotaState:
     user_id: str
     plan: str = "free"
-    # 本月已用
     sessions_used: int = 0
     messages_used: int = 0
-    # 订阅到期时间（UNIX timestamp，0=永不）
     expires_at: float = 0.0
-    # 本月计费周期起始
     cycle_start: float = field(default_factory=lambda: _month_start())
 
     @property
@@ -104,7 +102,6 @@ class QuotaState:
 
     @property
     def is_active(self) -> bool:
-        """订阅是否有效"""
         if self.plan == "free":
             return True
         if self.expires_at == 0:
@@ -144,23 +141,21 @@ class QuotaState:
 
 
 def _month_start() -> float:
-    """当月1日00:00:00 UTC 的时间戳"""
     now = datetime.now(timezone.utc)
     return datetime(now.year, now.month, 1, tzinfo=timezone.utc).timestamp()
 
 
 # ─────────────────────────────────────────────────────────────────
-# 内存存储（生产替换为 Redis）
+# 内存回退（开发模式）
 # ─────────────────────────────────────────────────────────────────
 
 _quota_store: dict[str, QuotaState] = {}
 
 
-def _get_or_create(user_id: str) -> QuotaState:
+def _mem_get_or_create(user_id: str) -> QuotaState:
     if user_id not in _quota_store:
         _quota_store[user_id] = QuotaState(user_id=user_id)
     state = _quota_store[user_id]
-    # 自动滚动月度周期
     current_cycle = _month_start()
     if state.cycle_start < current_cycle:
         state.sessions_used = 0
@@ -170,42 +165,134 @@ def _get_or_create(user_id: str) -> QuotaState:
 
 
 # ─────────────────────────────────────────────────────────────────
-# 公共 API
+# PostgreSQL 持久化层
+# ─────────────────────────────────────────────────────────────────
+
+_db_pool = None
+
+async def _get_pool():
+    global _db_pool
+    if _db_pool is None and USE_POSTGRES:
+        try:
+            import asyncpg
+            _db_pool = await asyncpg.create_pool(_settings.DB_URL, min_size=2, max_size=10)
+            _log.info("✅ quota: PostgreSQL 连接池已建立")
+        except Exception as e:
+            _log.error(f"❌ quota: PostgreSQL 连接失败，回退内存模式: {e}")
+    return _db_pool
+
+
+async def _db_get_or_create(user_id: str) -> QuotaState:
+    """从 PostgreSQL 读取配额状态，不存在则创建"""
+    pool = await _get_pool()
+    if not pool:
+        return _mem_get_or_create(user_id)
+
+    async with pool.acquire() as conn:
+        # 月度自动滚动
+        await conn.execute("SELECT reset_monthly_quota()")
+
+        row = await conn.fetchrow(
+            """
+            SELECT uq.sessions_used, uq.messages_used,
+                   EXTRACT(EPOCH FROM uq.cycle_start) AS cycle_start,
+                   u.plan,
+                   EXTRACT(EPOCH FROM u.plan_expires_at) AS expires_at
+            FROM user_quota uq
+            JOIN users u ON u.user_id = uq.user_id
+            WHERE uq.user_id = $1
+            """,
+            user_id
+        )
+        if row:
+            return QuotaState(
+                user_id=user_id,
+                plan=row["plan"] or "free",
+                sessions_used=row["sessions_used"],
+                messages_used=row["messages_used"],
+                expires_at=float(row["expires_at"] or 0),
+                cycle_start=float(row["cycle_start"]),
+            )
+        # 不存在则创建（user 可能尚未在 users 表中——降级到内存）
+        _log.warning(f"quota: 用户 {user_id} 未找到，使用内存模式")
+        return _mem_get_or_create(user_id)
+
+
+async def _db_save(state: QuotaState):
+    pool = await _get_pool()
+    if not pool:
+        _quota_store[state.user_id] = state
+        return
+    async with pool.acquire() as conn:
+        await conn.execute(
+            """
+            INSERT INTO user_quota (user_id, plan, sessions_used, messages_used, updated_at)
+            VALUES ($1, $2, $3, $4, NOW())
+            ON CONFLICT (user_id) DO UPDATE
+              SET sessions_used = EXCLUDED.sessions_used,
+                  messages_used = EXCLUDED.messages_used,
+                  updated_at    = NOW()
+            """,
+            state.user_id, state.plan, state.sessions_used, state.messages_used
+        )
+
+
+async def _db_upgrade_plan(user_id: str, plan: str, duration_days: int) -> QuotaState:
+    pool = await _get_pool()
+    state = await _db_get_or_create(user_id)
+    state.plan = plan
+    state.expires_at = time.time() + duration_days * 86400
+
+    if pool:
+        from datetime import timedelta
+        expires_dt = datetime.fromtimestamp(state.expires_at, tz=timezone.utc)
+        async with pool.acquire() as conn:
+            await conn.execute(
+                "UPDATE users SET plan = $1, plan_expires_at = $2 WHERE user_id = $3",
+                plan, expires_dt, user_id
+            )
+    else:
+        _quota_store[user_id] = state
+    return state
+
+
+# ─────────────────────────────────────────────────────────────────
+# 公共 API（同步兼容包装 + 异步版本）
 # ─────────────────────────────────────────────────────────────────
 
 def get_quota_status(user_id: str) -> QuotaState:
-    return _get_or_create(user_id)
+    """同步版（兼容旧调用），内存回退"""
+    return _mem_get_or_create(user_id)
 
 
-def quota_consume_session(user_id: str) -> QuotaState:
-    """消耗一次会话配额，返回最新状态"""
-    state = _get_or_create(user_id)
+async def get_quota_status_async(user_id: str) -> QuotaState:
+    """异步版，优先查 PostgreSQL"""
+    return await _db_get_or_create(user_id)
+
+
+async def quota_consume_session(user_id: str) -> QuotaState:
+    state = await _db_get_or_create(user_id)
     state.sessions_used += 1
+    await _db_save(state)
     return state
 
 
-def quota_consume_message(user_id: str, count: int = 1) -> QuotaState:
-    state = _get_or_create(user_id)
+async def quota_consume_message(user_id: str, count: int = 1) -> QuotaState:
+    state = await _db_get_or_create(user_id)
     state.messages_used += count
+    await _db_save(state)
     return state
 
 
-def upgrade_plan(
-    user_id: str,
-    plan: str,
-    duration_days: int = 30,
-) -> QuotaState:
+async def upgrade_plan(user_id: str, plan: str, duration_days: int = 30) -> QuotaState:
     """升级订阅（支付成功后调用）"""
     if plan not in PLANS:
         raise ValueError(f"未知套餐: {plan}")
-    state = _get_or_create(user_id)
-    state.plan = plan
-    state.expires_at = time.time() + duration_days * 86400
-    return state
+    return await _db_upgrade_plan(user_id, plan, duration_days)
 
 
 def downgrade_to_free(user_id: str) -> QuotaState:
-    state = _get_or_create(user_id)
+    state = _mem_get_or_create(user_id)
     state.plan = "free"
     state.expires_at = 0
     return state
@@ -218,20 +305,14 @@ def downgrade_to_free(user_id: str) -> QuotaState:
 async def require_session_quota(
     token: TokenData = Depends(get_current_user),
 ) -> QuotaState:
-    """
-    依赖注入：检查用户是否有剩余会话配额。
-    超限时返回 402 Payment Required。
-    管理员/教师（已验证）直接放行。
-    """
-    # 教师/管理员不受配额限制
+    """检查用户是否有剩余会话配额，超限返回 402"""
     if token.is_admin or token.is_teacher:
-        state = _get_or_create(token.user_id)
-        # 确保教师用的是 teacher_pro 以上套餐
+        state = await _db_get_or_create(token.user_id)
         if state.plan == "free":
             state.plan = "teacher_pro"
         return state
 
-    state = _get_or_create(token.user_id)
+    state = await _db_get_or_create(token.user_id)
     if not state.can_start_session:
         plan = state.current_plan
         raise HTTPException(
@@ -250,8 +331,8 @@ async def require_session_quota(
 async def require_pdf_export(
     token: TokenData = Depends(get_current_user),
 ) -> QuotaState:
-    """检查是否有 PDF 导出权限（教师版及以上）"""
-    state = _get_or_create(token.user_id)
+    """检查是否有 PDF 导出权限"""
+    state = await _db_get_or_create(token.user_id)
     if not state.current_plan.can_export_pdf and not token.is_admin:
         raise HTTPException(
             status_code=403,
@@ -276,13 +357,13 @@ quota_router = APIRouter(prefix="/api/quota", tags=["quota"])
 @quota_router.get("/status")
 async def my_quota(token: TokenData = Depends(get_current_user)):
     """查询当前用户的配额状态"""
-    state = get_quota_status(token.user_id)
+    state = await get_quota_status_async(token.user_id)
     return state.to_dict()
 
 
 @quota_router.get("/plans")
 async def list_plans():
-    """返回所有套餐详情（用于升级页面）"""
+    """返回所有套餐详情"""
     return [
         {
             "id": pid,

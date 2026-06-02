@@ -25,6 +25,10 @@ except ImportError:
     pass
 
 
+import logging
+_log = logging.getLogger(__name__)
+
+
 def _env(key: str, default: str = "") -> str:
     return os.environ.get(key, default)
 
@@ -94,10 +98,33 @@ class Settings:
         default_factory=lambda: _env_bool("XIRANG_USE_POSTGRES", False)
     )
 
-    # ── 鉴权 & 多租户 ────────────────────────────────────────
-    JWT_SECRET: str = field(
-        default_factory=lambda: _env("XIRANG_JWT_SECRET", secrets.token_hex(32))
+    # ── CORS ─────────────────────────────────────────────────
+    CORS_ORIGINS: list[str] = field(
+        default_factory=lambda: [
+            o.strip()
+            for o in _env("XIRANG_CORS_ORIGINS", "http://localhost:3000,http://localhost:8000").split(",")
+            if o.strip()
+        ]
     )
+
+    # ── 短信 ─────────────────────────────────────────────────
+    SMS_SANDBOX: bool = field(default_factory=lambda: _env_bool("XIRANG_SMS_SANDBOX", True))
+    ALIYUN_ACCESS_KEY_ID:     str = field(default_factory=lambda: _env("ALIYUN_ACCESS_KEY_ID", ""))
+    ALIYUN_ACCESS_KEY_SECRET: str = field(default_factory=lambda: _env("ALIYUN_ACCESS_KEY_SECRET", ""))
+    SMS_SIGN_NAME:    str = field(default_factory=lambda: _env("XIRANG_SMS_SIGN_NAME", "息壤历史"))
+    SMS_TEMPLATE_CODE: str = field(default_factory=lambda: _env("XIRANG_SMS_TEMPLATE_CODE", ""))
+
+    # ── 支付 ─────────────────────────────────────────────────
+    PAYMENT_SANDBOX:    bool = field(default_factory=lambda: _env_bool("XIRANG_PAYMENT_SANDBOX", True))
+    WECHAT_APP_ID:      str  = field(default_factory=lambda: _env("WECHAT_APP_ID", ""))
+    WECHAT_APP_SECRET:  str  = field(default_factory=lambda: _env("WECHAT_APP_SECRET", ""))
+    WECHAT_MCH_ID:      str  = field(default_factory=lambda: _env("WECHAT_MCH_ID", ""))
+    WECHAT_API_KEY:     str  = field(default_factory=lambda: _env("WECHAT_API_KEY", ""))
+    ALIPAY_APP_ID:      str  = field(default_factory=lambda: _env("ALIPAY_APP_ID", ""))
+    ALIPAY_PRIVATE_KEY: str  = field(default_factory=lambda: _env("ALIPAY_PRIVATE_KEY", ""))
+
+    # ── 鉴权 & 多租户 ────────────────────────────────────────
+    JWT_SECRET: str = field(default_factory=lambda: _env("XIRANG_JWT_SECRET", ""))
     JWT_ALGORITHM: str = "HS256"
     JWT_EXPIRE_MINUTES: int = field(
         default_factory=lambda: _env_int("XIRANG_JWT_EXPIRE", 60 * 24 * 7)  # 7天
@@ -135,6 +162,20 @@ class Settings:
     HOST: str = field(default_factory=lambda: _env("XIRANG_HOST", "0.0.0.0"))
     PORT: int = field(default_factory=lambda: _env_int("XIRANG_PORT", 8000))
     WORKERS: int = field(default_factory=lambda: _env_int("XIRANG_WORKERS", 1))
+
+    def __post_init__(self):
+        # JWT_SECRET 校验：生产必须显式配置，开发模式随机生成并警告
+        if not self.JWT_SECRET:
+            if self.ENV == "prod":
+                raise RuntimeError(
+                    "生产环境必须设置 XIRANG_JWT_SECRET 环境变量（至少32位随机字符串）\n"
+                    "生成命令：python -c \"import secrets; print(secrets.token_hex(32))\""
+                )
+            _log.warning(
+                "⚠️  XIRANG_JWT_SECRET 未设置，使用随机密钥"
+                "（重启后所有用户需重新登录）——开发/测试模式可接受，生产请设置固定密钥"
+            )
+            self.JWT_SECRET = secrets.token_hex(32)
 
 
 _instance: Settings | None = None
