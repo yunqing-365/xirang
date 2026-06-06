@@ -584,8 +584,9 @@ async def stream_next(session_id: str, user_id: str = Query(default="anonymous")
                     yield _sse({"type": "world_mood_change",
                                  "new_mood": trigger.mood_change})
                     await asyncio.sleep(0.3)
-                except (ValueError, AttributeError):
-                    pass
+                except (ValueError, AttributeError) as _mood_err:
+                    import logging as _log_mod
+                    _log_mod.getLogger("xirang.server").debug(f"mood_change 值无效，跳过: {_mood_err}")
             # 人文反思
             if trigger.reflection_insight:
                 yield _sse({
@@ -762,7 +763,7 @@ class QuizRequest(BaseModel):
     session_id: str
     user_id: str = "anonymous"
 
-_quiz_client = _llm_aclient
+# _quiz_client 已合并到 llm_chat
 
 @app.post("/api/quiz")
 async def generate_quiz(req: QuizRequest):
@@ -804,16 +805,16 @@ async def generate_quiz(req: QuizRequest):
 ]"""
 
     try:
-        resp = await _quiz_client.chat.completions.create(
-            model=_settings.MODEL_NAME,
+        raw = await llm_chat(
             messages=[{"role": "user", "content": prompt}],
             max_tokens=800,
             temperature=0.5,
             timeout=20,
+            fallback_text="",
         )
-        raw = resp.choices[0].message.content.strip()
-        # 去掉可能的 markdown fence
         raw = raw.replace("```json", "").replace("```", "").strip()
+        if not raw:
+            return {"status": "error", "message": "LLM 繁忙，请稍后重试", "questions": []}
         questions = json.loads(raw)
         return {"status": "success", "questions": questions[:3]}
     except Exception as e:
@@ -825,7 +826,7 @@ class ExplainRequest(BaseModel):
     term: str           # 需要解释的历史名词
     context: str = ""  # 当前对话场景（可选，提升解释相关性）
 
-_explain_client = _llm_aclient
+# _explain_client 已合并到 llm_chat
 
 @app.post("/api/explain")
 async def explain_term(req: ExplainRequest):
@@ -839,18 +840,14 @@ async def explain_term(req: ExplainRequest):
         f"{'当前场景：' + req.context[:200] if req.context else ''}"
         "要求：语言文雅，通俗易懂，如有朝代/人物/制度背景请提及。只输出解释，不要加引号或前缀。"
     )
-    try:
-        resp = await _explain_client.chat.completions.create(
-            model=_settings.MODEL_NAME,
-            messages=[{"role": "user", "content": prompt}],
-            max_tokens=120,
-            temperature=0.3,
-            timeout=8,
-        )
-        explanation = resp.choices[0].message.content.strip()
-        return {"term": term, "explanation": explanation}
-    except Exception as e:
-        return {"term": term, "explanation": f"（暂无解释：{str(e)[:40]}）"}
+    explanation = await llm_chat(
+        messages=[{"role": "user", "content": prompt}],
+        max_tokens=120,
+        temperature=0.3,
+        timeout=8,
+        fallback_text=f"（{term}：暂无解释，请稍后再试）",
+    )
+    return {"term": term, "explanation": explanation or f"（{term}：暂无解释）"}
 
 
 
@@ -892,7 +889,7 @@ async def get_checkin_status(user_id: str):
 class DigestRequest(BaseModel):
     user_id: str = "anonymous"
 
-_digest_client = _llm_aclient
+# _digest_client 已合并到 llm_chat
 
 @app.post("/api/daily_digest")
 async def generate_daily_digest(req: DigestRequest):
@@ -927,14 +924,16 @@ async def generate_daily_digest(req: DigestRequest):
 }}"""
 
     try:
-        resp = await _digest_client.chat.completions.create(
-            model=_settings.MODEL_NAME,
+        raw = await llm_chat(
             messages=[{"role": "user", "content": prompt}],
             max_tokens=500,
             temperature=0.7,
             timeout=20,
+            fallback_text="",
         )
-        raw = resp.choices[0].message.content.strip().replace("```json","").replace("```","").strip()
+        raw = raw.replace("```json","").replace("```","").strip()
+        if not raw:
+            return {"status": "error", "message": "LLM 繁忙，请稍后重试"}
         digest = json.loads(raw)
         # 记录生成日期
         profile.daily_digest_last = today
@@ -957,27 +956,22 @@ async def generate_share_card(req: ShareCardRequest):
     返回分享卡所需的结构化数据，供前端 Canvas 渲染成精美图片。
     额外用 LLM 生成一句当代导读，让金句更有传播价值。
     """
-    _sc_client = _llm_aclient
     prompt = (
         f"以下是历史情境中「{req.speaker or '古人'}」的一句话：\n「{req.quote}」\n"
         f"朝代：{req.era or '不详'}\n"
         "请用20字以内写一句当代导读，让现代读者感同身受。只输出导读，不加引号或其他文字。"
     )
-    try:
-        resp = await _sc_client.chat.completions.create(
-            model=_settings.MODEL_NAME,
-            messages=[{"role": "user", "content": prompt}],
-            max_tokens=60, temperature=0.6, timeout=10,
-        )
-        modern_note = resp.choices[0].message.content.strip()
-    except Exception:
-        modern_note = "历史深处的回响，穿越千年而来"
+    modern_note = await llm_chat(
+        messages=[{"role": "user", "content": prompt}],
+        max_tokens=60, temperature=0.6, timeout=10,
+        fallback_text="历史深处的回响，穿越千年而来",
+    )
 
     return {
         "quote": req.quote,
         "speaker": req.speaker or "历史人物",
         "era": req.era or "",
-        "modern_note": modern_note,
+        "modern_note": modern_note or "历史深处的回响，穿越千年而来",
         "watermark": "息壤 · 人文时空",
     }
 
@@ -1074,22 +1068,17 @@ async def generate_scene_image(req: SceneImageRequest):
     scene_excerpt = scene_raw[-300:] if scene_raw else req.scene_hint or "古代中国文人茶室"
 
     # 先用 LLM 将对话场景提炼成图像提示词（英文）
-    _prompt_client = _llm_aclient
-    try:
-        prompt_resp = await _prompt_client.chat.completions.create(
-            model=_settings.MODEL_NAME,
-            messages=[{
-                "role": "user",
-                "content": (
-                    f"将以下中文历史场景描述提炼成 20 个英文关键词，用于文生图提示词。"
-                    f"只输出英文关键词，逗号分隔，不加其他文字：\n{scene_excerpt}"
-                )
-            }],
-            max_tokens=80, temperature=0.3, timeout=8,
-        )
-        scene_keywords = prompt_resp.choices[0].message.content.strip()
-    except Exception:
-        scene_keywords = req.scene_hint or "ancient Chinese scholar room, candlelight"
+    scene_keywords = await llm_chat(
+        messages=[{
+            "role": "user",
+            "content": (
+                f"将以下中文历史场景描述提炼成 20 个英文关键词，用于文生图提示词。"
+                f"只输出英文关键词，逗号分隔，不加其他文字：\n{scene_excerpt}"
+            )
+        }],
+        max_tokens=80, temperature=0.3, timeout=8,
+        fallback_text=req.scene_hint or "ancient Chinese scholar room, candlelight",
+    ) or (req.scene_hint or "ancient Chinese scholar room, candlelight")
 
     full_prompt = f"{scene_keywords}, {_INK_STYLE}"
 
@@ -1220,8 +1209,9 @@ async def get_ingest_status():
                 "entities": len(g.get("entities", [])),
                 "relations": len(g.get("relationships", [])),
             })
-        except Exception:
-            pass
+        except Exception as _kg_err:
+            import logging as _log_mod
+            _log_mod.getLogger("xirang.server").debug(f"知识图谱读取跳过: {_kg_err}")
 
     # raw_documents 目录概览
     raw_docs = []

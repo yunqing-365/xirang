@@ -1691,6 +1691,171 @@
         #chat-stream-empty .empty-icon { font-size: 2.8em; margin-bottom: 12px; }
         #chat-stream-empty .empty-text { font-size: 0.88em; color: #a09070; letter-spacing: .08em; line-height: 2; }
 
+        /* ══════════════════════════════════════════════════════════
+           ✦ P0 UX 升级包 · 移动适配 + 引导线 + 错误状态增强
+           ══════════════════════════════════════════════════════════ */
+
+        /* ── 步骤引导线 ─────────────────────────────────────────── */
+        #onboarding-guide {
+            width: 90%; max-width: 1400px; margin: 0 auto 16px;
+            display: flex; align-items: center; gap: 0;
+            background: rgba(255,255,255,0.65);
+            border: 1px solid rgba(200,168,74,0.4);
+            border-radius: 10px; padding: 12px 20px;
+            backdrop-filter: blur(6px);
+            box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+            transition: opacity 0.4s;
+        }
+        #onboarding-guide.guide-done { opacity: 0; pointer-events: none; height: 0; padding: 0; margin: 0; overflow: hidden; }
+        .guide-step {
+            display: flex; flex-direction: column; align-items: center;
+            flex: 1; position: relative; gap: 4px;
+        }
+        .guide-step:not(:last-child)::after {
+            content: ''; position: absolute; top: 14px; left: calc(50% + 18px);
+            width: calc(100% - 36px); height: 2px;
+            background: linear-gradient(90deg, rgba(200,168,74,0.5), rgba(200,168,74,0.1));
+        }
+        .guide-step.step-done:not(:last-child)::after {
+            background: linear-gradient(90deg, #c8a84a, rgba(200,168,74,0.4));
+        }
+        .guide-dot {
+            width: 28px; height: 28px; border-radius: 50%;
+            border: 2px solid rgba(200,168,74,0.4);
+            background: rgba(255,255,255,0.8);
+            display: flex; align-items: center; justify-content: center;
+            font-size: 0.75em; color: #b0a080; transition: all 0.3s;
+            z-index: 1; position: relative;
+        }
+        .guide-step.step-active .guide-dot {
+            border-color: #c8a84a; background: #c8a84a; color: white;
+            box-shadow: 0 0 0 4px rgba(200,168,74,0.2);
+            animation: guide-pulse 2s infinite;
+        }
+        .guide-step.step-done .guide-dot {
+            border-color: #2a8a5a; background: #2a8a5a; color: white;
+        }
+        @keyframes guide-pulse {
+            0%,100% { box-shadow: 0 0 0 4px rgba(200,168,74,0.2); }
+            50% { box-shadow: 0 0 0 8px rgba(200,168,74,0.05); }
+        }
+        .guide-label {
+            font-size: 0.68em; color: #a09060; letter-spacing: 0.06em;
+            text-align: center; white-space: nowrap;
+        }
+        .guide-step.step-active .guide-label { color: #7a5200; font-weight: 600; }
+        .guide-step.step-done .guide-label { color: #2a8a5a; }
+
+        /* ── SSE 重连状态条 ────────────────────────────────────── */
+        #sse-status-bar {
+            display: none; position: fixed; bottom: 0; left: 0; right: 0;
+            background: #7a1a1a; color: #fdd; text-align: center;
+            font-size: 0.82em; padding: 8px 16px; z-index: 9998;
+            letter-spacing: 0.05em; gap: 12px; align-items: center;
+            justify-content: center;
+        }
+        #sse-status-bar.visible { display: flex; }
+        #sse-status-bar button {
+            background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.4);
+            color: white; padding: 3px 12px; border-radius: 4px; cursor: pointer;
+            font-size: 0.9em;
+        }
+
+        /* ── 空状态增强（操作前） ──────────────────────────────── */
+        .empty-state-action {
+            margin-top: 16px;
+            padding: 10px 24px; background: rgba(200,168,74,0.1);
+            border: 1px dashed rgba(200,168,74,0.5);
+            border-radius: 6px; color: #7a5200;
+            font-size: 0.82em; letter-spacing: 0.06em;
+            cursor: pointer; transition: background 0.2s;
+        }
+        .empty-state-action:hover { background: rgba(200,168,74,0.2); }
+
+        /* ── API 超时骨架屏 ────────────────────────────────────── */
+        .skeleton-card {
+            background: rgba(255,255,255,0.6);
+            border: 1px solid var(--border-gold);
+            border-radius: 8px; padding: 20px 24px;
+        }
+        .skeleton-line {
+            height: 12px; border-radius: 6px; margin-bottom: 10px;
+            background: linear-gradient(90deg, #f0e8d0 25%, #fdf8ef 50%, #f0e8d0 75%);
+            background-size: 200% 100%;
+            animation: skeleton-shimmer 1.5s infinite;
+        }
+        .skeleton-line:last-child { margin-bottom: 0; width: 60%; }
+        @keyframes skeleton-shimmer {
+            0% { background-position: 200% 0; }
+            100% { background-position: -200% 0; }
+        }
+
+        /* ── 移动端全局响应式 ───────────────────────────────────── */
+        @media (max-width: 768px) {
+            /* 主容器改为纵向堆叠 */
+            .container {
+                flex-direction: column !important;
+                width: 96% !important;
+                gap: 16px !important;
+            }
+            /* 右侧面板在移动端水平滚动 */
+            .right-panels {
+                display: flex !important;
+                flex-direction: row !important;
+                overflow-x: auto !important;
+                gap: 12px !important;
+                padding-bottom: 8px !important;
+                width: 100% !important;
+                min-width: unset !important;
+                max-width: unset !important;
+            }
+            .side-panel {
+                min-width: 260px !important;
+                flex-shrink: 0 !important;
+            }
+            /* 输入区全宽 */
+            #chat-input-area {
+                width: 96% !important;
+                padding: 12px !important;
+            }
+            .intervention-box {
+                flex-wrap: wrap !important;
+                width: 100% !important;
+            }
+            .intervention-box input {
+                flex: 1 1 100% !important;
+                min-width: unset !important;
+                margin-bottom: 8px !important;
+            }
+            .mode-switch { width: 100% !important; }
+            /* 按钮组自动换行 */
+            #chat-input-area > div:last-child { flex-wrap: wrap !important; }
+            .advance-btn { font-size: 0.85em !important; padding: 8px 12px !important; }
+            /* 标题区 */
+            .creation-panel { width: 96% !important; padding: 20px 14px !important; }
+            /* 卡片内容 */
+            .chat-card { padding: 16px 18px !important; }
+            /* Reflection overlay */
+            .reflection-card { padding: 28px 20px !important; width: 92% !important; }
+            /* 引导线在小屏折叠文字 */
+            #onboarding-guide { padding: 10px 12px !important; }
+            .guide-label { display: none !important; }
+            .guide-dot { width: 24px !important; height: 24px !important; }
+            /* Toast 靠底居中 */
+            #xi-toast-container {
+                right: 12px !important; bottom: 60px !important;
+                left: 12px !important; max-width: unset !important;
+            }
+            .xi-toast { max-width: 100% !important; }
+            /* 新手提示横幅 */
+            #ux-hint-banner { width: 96% !important; }
+        }
+
+        @media (max-width: 480px) {
+            body { font-size: 14px; }
+            .guide-step:not(:last-child)::after { display: none; }
+        }
+
     </style>
 </head>
 <body>
@@ -1834,9 +1999,12 @@
                 <div class="empty-icon">⌛</div>
                 <div class="empty-text">
                     时空尚未开启<br>
-                    选择场景后点击「▶ 推进时空演化」<br>
+                    在上方输入历史主题，点击「推进时空演化」<br>
                     历史将在此处徐徐展开
                 </div>
+                <button class="empty-state-action" onclick="document.getElementById('interventionInput')?.focus(); advanceGuideStep(2);">
+                    ✦ 点此开始你的第一次探究
+                </button>
             </div>
         </div>
 
@@ -2097,6 +2265,37 @@
         </div>
     </div>
 
+
+        <!-- ✦ P0 UX：步骤引导线 ✦ -->
+        <div id="onboarding-guide" role="navigation" aria-label="使用步骤引导">
+            <div class="guide-step step-active" id="guide-step-1" title="选择历史时空">
+                <div class="guide-dot">①</div>
+                <div class="guide-label">选择时空</div>
+            </div>
+            <div class="guide-step" id="guide-step-2" title="开启世界">
+                <div class="guide-dot">②</div>
+                <div class="guide-label">开启世界</div>
+            </div>
+            <div class="guide-step" id="guide-step-3" title="推进演化">
+                <div class="guide-dot">③</div>
+                <div class="guide-label">推进演化</div>
+            </div>
+            <div class="guide-step" id="guide-step-4" title="做出选择">
+                <div class="guide-dot">④</div>
+                <div class="guide-label">命运分叉</div>
+            </div>
+            <div class="guide-step" id="guide-step-5" title="探索发现">
+                <div class="guide-dot">⑤</div>
+                <div class="guide-label">沉思发现</div>
+            </div>
+        </div>
+
+        <!-- SSE 断线重连状态条 -->
+        <div id="sse-status-bar">
+            <span>⚡ 时空波动，正在重新连接…</span>
+            <button onclick="window._sseRetryManual && window._sseRetryManual()">立即重试</button>
+            <button onclick="document.getElementById('sse-status-bar').classList.remove('visible')" style="background:transparent;border:none;color:rgba(255,255,255,0.6);">×</button>
+        </div>
 
         <!-- ★ UX改进: 新手提示横幅 ★ -->
         <div id="ux-hint-banner" style="
@@ -3389,6 +3588,7 @@
                 factEl.style.display = "none";
             }
             document.getElementById('reflection-overlay').classList.add('open');
+            if (window.advanceGuideStep) advanceGuideStep(5);
         }
 
         function closeReflection() {
@@ -3474,6 +3674,7 @@
                     initWorldUI(data);
                     refreshProfile();
                     showToast('时空已开启，点击「▶ 推进时空演化」开始探究', 'success', 4000);
+                    if (window.advanceGuideStep) advanceGuideStep(3);
                     if (data.quota && data.quota.plan === 'free' && data.quota.sessions_remaining <= 1)
                         showToast('免费体验还剩 ' + data.quota.sessions_remaining + ' 次', 'info');
                 } else {
@@ -3871,15 +4072,18 @@
         /* ══ SSE 全事件接入 ══════════════════════════════════ */
         function nextRound() {
             if (!currentSessionId) return;
+            if (window.advanceGuideStep) advanceGuideStep(3);
             const btn = document.getElementById('nextBtn');
             btn.disabled = true;
             btn.innerText = "时空法则正在演算...";
             removeThinking();
+            const _skeletonId = window.showSkeletonCard ? window.showSkeletonCard() : null;
 
             const url = `/api/stream_next/${currentSessionId}?user_id=${currentUserId}`;
             const eventSource = new EventSource(url);
 
             eventSource.onmessage = function(event) {
+                if (_skeletonId) { window.removeSkeletonCard(_skeletonId); }
                 const data = JSON.parse(event.data);
 
                 if (data.type === 'narrator') {
@@ -3987,6 +4191,7 @@
                     <div class="choices-title">⬦ 命 运 分 叉 · 请 做 出 选 择</div>
                     ${btns}
                 </div>`);
+            if (window.advanceGuideStep) advanceGuideStep(4);
             // ── Phase 13A：在选项卡上追加「多视角」入口 ─────
             const card = document.getElementById(cardId);
             if (card) addPerspectiveBtnToChoicesCard(card);
@@ -5906,6 +6111,99 @@ window.showToast = function(msg, type = 'info', duration = 3500) {
     }, duration);
 };
 
+// ══ ✦ P0 UX 引导线系统 ═══════════════════════════════════════════
+(function initGuideSystem() {
+    let _currentStep = 1;
+    const STEPS = 5;
+
+    window.advanceGuideStep = function(step) {
+        if (step <= _currentStep) return;
+        _currentStep = step;
+        for (let i = 1; i <= STEPS; i++) {
+            const el = document.getElementById('guide-step-' + i);
+            if (!el) continue;
+            el.classList.remove('step-active', 'step-done');
+            if (i < step) el.classList.add('step-done');
+            else if (i === step) el.classList.add('step-active');
+        }
+        if (step >= STEPS) {
+            setTimeout(() => {
+                const guide = document.getElementById('onboarding-guide');
+                if (guide) guide.classList.add('guide-done');
+            }, 2000);
+        }
+    };
+
+    // 监听关键动作来自动推进引导
+    document.addEventListener('click', function(e) {
+        const btn = e.target.closest('button');
+        if (!btn) return;
+        if (btn.id === 'nextBtn' || btn.onclick?.toString?.().includes('nextRound')) {
+            advanceGuideStep(3);
+        }
+    }, { passive: true });
+})();
+
+// ══ ✦ 骨架屏（API 超时占位） ════════════════════════════════════
+window.showSkeletonCard = function() {
+    const stream = document.getElementById('chat-stream');
+    if (!stream) return null;
+    const id = 'skeleton-' + Date.now();
+    stream.insertAdjacentHTML('beforeend', `
+        <div class="chat-card skeleton-card" id="${id}">
+            <div class="skeleton-line" style="width:75%"></div>
+            <div class="skeleton-line" style="width:90%"></div>
+            <div class="skeleton-line" style="width:82%"></div>
+            <div class="skeleton-line"></div>
+        </div>`);
+    if (stream.scrollHeight > stream.clientHeight) {
+        stream.closest('.deduction-stream')?.lastElementChild?.scrollIntoView({ behavior: 'smooth', block: 'end' });
+    }
+    return id;
+};
+window.removeSkeletonCard = function(id) {
+    if (id) document.getElementById(id)?.remove();
+};
+
+// ══ ✦ SSE 断线重连增强 ═══════════════════════════════════════════
+(function patchEventSourceResilience() {
+    const statusBar = document.getElementById('sse-status-bar');
+    let _retryTimer = null;
+    let _retryCount = 0;
+
+    function showStatusBar(show) {
+        if (!statusBar) return;
+        statusBar.classList.toggle('visible', show);
+    }
+
+    // 监听所有 EventSource 错误（patch onerror）
+    const OriginalEventSource = window.EventSource;
+    window.EventSource = function(url, cfg) {
+        const es = new OriginalEventSource(url, cfg);
+        const origOnerror = es.onerror;
+        es.addEventListener('error', function() {
+            if (es.readyState === EventSource.CLOSED) {
+                _retryCount++;
+                showStatusBar(true);
+                if (_retryCount <= 3) {
+                    clearTimeout(_retryTimer);
+                    _retryTimer = setTimeout(() => showStatusBar(false), 8000);
+                }
+            }
+        });
+        window._sseRetryManual = function() {
+            showStatusBar(false);
+            _retryCount = 0;
+            showToast('请重新点击「推进时空演化」', 'info');
+        };
+        return es;
+    };
+    Object.setPrototypeOf(window.EventSource, OriginalEventSource);
+    Object.defineProperty(window.EventSource, 'CONNECTING', { value: 0 });
+    Object.defineProperty(window.EventSource, 'OPEN', { value: 1 });
+    Object.defineProperty(window.EventSource, 'CLOSED', { value: 2 });
+})();
+
 // ★ 首条内容出现时隐藏空状态
 (function watchChatStream() {
     const stream = document.getElementById('chat-stream');
@@ -6247,6 +6545,189 @@ window.xiProgress = {
         setTimeout(() => { h1.style.transition = 'opacity 1s ease, transform 1s ease'; h1.style.opacity = '1'; h1.style.transform = 'none'; }, 100); }
     if (p)  { p.style.opacity  = '0';
         setTimeout(() => { p.style.transition  = 'opacity 1.2s ease'; p.style.opacity  = '1'; }, 500); }
+})();
+</script>
+
+<!-- ✦ 升级订阅弹层 ✦ -->
+<div id="upgrade-modal" style="
+    display:none; position:fixed; inset:0; z-index:10000;
+    background:rgba(30,20,5,0.72); backdrop-filter:blur(4px);
+    align-items:center; justify-content:center;
+">
+  <div style="
+    background:#FEFCF5; border:1px solid #c8a84a; border-radius:14px;
+    padding:36px 40px; max-width:480px; width:90%; position:relative;
+    box-shadow:0 20px 60px rgba(0,0,0,0.3);
+    font-family:'Noto Serif SC',serif;
+  ">
+    <button onclick="closeUpgradeModal()" style="
+      position:absolute; top:14px; right:18px; background:none; border:none;
+      font-size:1.4em; color:#a09070; cursor:pointer; line-height:1;
+    ">×</button>
+    <div style="text-align:center; margin-bottom:24px;">
+      <div style="font-size:1.8em; margin-bottom:6px;">⌛</div>
+      <div style="font-size:1.18em; color:#3a2000; font-weight:700; letter-spacing:.08em;">
+        免费探索次数已用完
+      </div>
+      <div style="font-size:0.85em; color:#a07830; margin-top:8px; line-height:1.8;">
+        升级即可无限畅游时空，解锁教师大屏、PDF报告等专业功能
+      </div>
+    </div>
+    <!-- 套餐卡片 -->
+    <div id="upgrade-plans-container" style="display:flex; flex-direction:column; gap:10px; margin-bottom:24px;">
+      <div style="text-align:center; color:#a09070; font-size:0.85em;">加载套餐中…</div>
+    </div>
+    <!-- 邀请码兑换 -->
+    <div style="border-top:1px dashed #c8a84a; padding-top:16px; margin-top:4px;">
+      <div style="font-size:0.8em; color:#a07830; margin-bottom:8px; letter-spacing:.04em;">已有邀请码？</div>
+      <div style="display:flex; gap:8px;">
+        <input id="invite-code-input" placeholder="输入邀请码" style="
+          flex:1; padding:8px 12px; border:1px solid #c8a84a; border-radius:6px;
+          font-family:'Noto Serif SC',serif; font-size:0.88em; color:#3a2000;
+          background:rgba(255,255,255,0.8);
+        ">
+        <button onclick="redeemInviteCode()" style="
+          padding:8px 16px; background:#3a2000; color:#f5e8c0;
+          border:none; border-radius:6px; cursor:pointer; font-size:0.88em;
+          font-family:'Noto Serif SC',serif; letter-spacing:.04em;
+          transition:background .2s;
+        ">兑换</button>
+      </div>
+      <div id="invite-redeem-status" style="font-size:0.78em; color:#a07830; margin-top:6px; min-height:16px;"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ══ 升级弹层控制 ═══════════════════════════════════════════════
+function openUpgradeModal() {
+    const modal = document.getElementById('upgrade-modal');
+    modal.style.display = 'flex';
+    loadUpgradePlans();
+}
+function closeUpgradeModal() {
+    document.getElementById('upgrade-modal').style.display = 'none';
+}
+document.getElementById('upgrade-modal').addEventListener('click', function(e) {
+    if (e.target === this) closeUpgradeModal();
+});
+
+async function loadUpgradePlans() {
+    const container = document.getElementById('upgrade-plans-container');
+    try {
+        const res = await fetch('/api/payment/plans');
+        if (!res.ok) throw new Error('加载失败');
+        const data = await res.json();
+        const plans = (data.plans || []).filter(p => p.plan_id !== 'free');
+        if (!plans.length) {
+            container.innerHTML = '<div style="text-align:center;color:#a09070;font-size:0.85em;">暂无可用套餐</div>';
+            return;
+        }
+        container.innerHTML = plans.map(p => `
+            <div style="
+                border:1px solid rgba(200,168,74,0.4); border-radius:8px;
+                padding:14px 18px; display:flex; align-items:center; gap:12px;
+                background:rgba(255,250,240,0.6);
+                cursor:pointer; transition:border-color .2s, background .2s;
+            " onmouseover="this.style.borderColor='#c8a84a';this.style.background='rgba(200,168,74,0.08)'"
+               onmouseout="this.style.borderColor='rgba(200,168,74,0.4)';this.style.background='rgba(255,250,240,0.6)'"
+               onclick="startPurchase('${p.plan_id}',30)">
+                <div style="flex:1;">
+                    <div style="font-weight:700;color:#3a2000;font-size:0.98em;">${p.name}</div>
+                    <div style="font-size:0.75em;color:#a07830;margin-top:3px;">
+                        ${(p.features||[]).filter(Boolean).join(' · ')}
+                    </div>
+                </div>
+                <div style="text-align:right;white-space:nowrap;">
+                    <div style="font-size:1.1em;font-weight:700;color:#7a3a00;">¥${p.price_monthly}<span style="font-size:0.7em;font-weight:400;">/月</span></div>
+                    ${p.price_yearly ? `<div style="font-size:0.72em;color:#a07830;">年付仅¥${(p.price_yearly/12).toFixed(0)}/月</div>` : ''}
+                </div>
+            </div>
+        `).join('');
+    } catch(e) {
+        container.innerHTML = '<div style="text-align:center;color:#c07070;font-size:0.85em;">套餐加载失败，请刷新重试</div>';
+    }
+}
+
+async function startPurchase(planId, durationDays) {
+    try {
+        const token = window._authToken || '';
+        const res = await fetch('/api/payment/create_order', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+            body: JSON.stringify({ plan: planId, duration_days: durationDays, channel: 'wechat' })
+        });
+        const data = await res.json();
+        if (!res.ok) {
+            showToast(data.detail || '创建订单失败', 'error');
+            return;
+        }
+        // 显示支付二维码或沙箱提示
+        if (data.sandbox) {
+            const confirmed = confirm(`【沙箱模式】\n订单号：${data.order_id}\n金额：¥${data.amount_yuan}\n\n点击确定模拟支付成功`);
+            if (confirmed) {
+                const mockRes = await fetch('/api/payment/mock_notify', {
+                    method: 'POST', headers: {'Content-Type':'application/json'},
+                    body: JSON.stringify({ order_id: data.order_id })
+                });
+                const mockData = await mockRes.json();
+                if (mockData.success) {
+                    closeUpgradeModal();
+                    showToast(`✓ ${mockData.message}`, 'success', 5000);
+                    setTimeout(refreshProfile, 1000);
+                }
+            }
+        } else {
+            // 生产：跳转微信/支付宝收银台（或展示二维码）
+            window.open(data.qr_code_url, '_blank');
+            showToast('已打开支付页面，完成后请刷新', 'info', 6000);
+        }
+    } catch(e) {
+        showToast('网络错误，请稍后重试', 'error');
+    }
+}
+
+async function redeemInviteCode() {
+    const code = document.getElementById('invite-code-input').value.trim();
+    const statusEl = document.getElementById('invite-redeem-status');
+    if (!code) { statusEl.textContent = '请输入邀请码'; return; }
+    statusEl.textContent = '兑换中…';
+    try {
+        const token = window._authToken || '';
+        const res = await fetch('/api/invite/redeem', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+            body: JSON.stringify({ code })
+        });
+        const data = await res.json();
+        if (!res.ok) {
+            statusEl.style.color = '#c05050';
+            statusEl.textContent = data.detail || '兑换失败';
+        } else {
+            statusEl.style.color = '#2a8a5a';
+            statusEl.textContent = '✓ 兑换成功！';
+            setTimeout(() => { closeUpgradeModal(); refreshProfile(); }, 1500);
+        }
+    } catch(e) {
+        statusEl.style.color = '#c05050';
+        statusEl.textContent = '网络错误，请重试';
+    }
+}
+
+// ══ 重写 402 处理：弹升级弹层而非仅 toast ══════════════════════
+(function patch402Handler() {
+    const _origFetch = window.fetch;
+    window.fetch = async function(...args) {
+        const res = await _origFetch(...args);
+        if (res.status === 402) {
+            // 克隆 response 供原始调用读取
+            const cloned = res.clone();
+            // 弹升级弹层
+            openUpgradeModal();
+            return cloned;
+        }
+        return res;
+    };
 })();
 </script>
 </body>
