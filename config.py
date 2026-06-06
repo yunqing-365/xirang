@@ -76,6 +76,9 @@ class Settings:
     MAX_ACTIVE_SESSIONS: int = field(
         default_factory=lambda: _env_int("XIRANG_MAX_SESSIONS", 200)
     )
+    DIALOGUE_CONTEXT_WINDOW: int = field(
+        default_factory=lambda: _env_int("XIRANG_DIALOGUE_WINDOW", 8000)  # 保留最近 8000 字符
+    )
 
     # ── Redis（会话持久化 & 限流）────────────────────────────
     REDIS_URL: str = field(
@@ -162,6 +165,7 @@ class Settings:
     HOST: str = field(default_factory=lambda: _env("XIRANG_HOST", "0.0.0.0"))
     PORT: int = field(default_factory=lambda: _env_int("XIRANG_PORT", 8000))
     WORKERS: int = field(default_factory=lambda: _env_int("XIRANG_WORKERS", 1))
+    DEBUG: bool = field(default_factory=lambda: _env_bool("XIRANG_DEBUG", False))
 
     def __post_init__(self):
         # JWT_SECRET 校验：生产必须显式配置，开发模式随机生成并警告

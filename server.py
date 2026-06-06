@@ -17,7 +17,7 @@ from pathlib import Path
 
 import uvicorn
 from fastapi import FastAPI, HTTPException, Query
-from openai import AsyncOpenAI
+from infra.llm_client import aclient as _llm_aclient, llm_chat, llm_chat_stream
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
@@ -199,11 +199,14 @@ async def get_index():
 
 @app.get("/api/health")
 async def health():
+    from infra.llm_client import get_llm_status
+    llm_status = get_llm_status()
     return {
-        "status": "ok",
+        "status": "degraded" if llm_status["circuit_open"] else "ok",
         "version": "2.1.0",
         "active_sessions": await session_mgr.active_count(),
         "model": _settings.MODEL_NAME,
+        "llm": llm_status,
     }
 
 
@@ -216,9 +219,7 @@ async def create_world(req: WorldCreationRequest):
     session_id = f"session_{uuid.uuid4().hex[:8]}"
     manager = ScenarioManager()
 
-    result = await asyncio.to_thread(
-        manager.generate_dynamic_scenario, req.theme, req.genre, session_id
-    )
+    result = await manager.generate_dynamic_scenario(req.theme, req.genre, session_id)
     if not result:
         raise HTTPException(status_code=500, detail="世界生成失败")
 
@@ -761,7 +762,7 @@ class QuizRequest(BaseModel):
     session_id: str
     user_id: str = "anonymous"
 
-_quiz_client = AsyncOpenAI(api_key=_settings.API_KEY, base_url=_settings.BASE_URL)
+_quiz_client = _llm_aclient
 
 @app.post("/api/quiz")
 async def generate_quiz(req: QuizRequest):
@@ -824,7 +825,7 @@ class ExplainRequest(BaseModel):
     term: str           # 需要解释的历史名词
     context: str = ""  # 当前对话场景（可选，提升解释相关性）
 
-_explain_client = AsyncOpenAI(api_key=_settings.API_KEY, base_url=_settings.BASE_URL)
+_explain_client = _llm_aclient
 
 @app.post("/api/explain")
 async def explain_term(req: ExplainRequest):
@@ -891,7 +892,7 @@ async def get_checkin_status(user_id: str):
 class DigestRequest(BaseModel):
     user_id: str = "anonymous"
 
-_digest_client = AsyncOpenAI(api_key=_settings.API_KEY, base_url=_settings.BASE_URL)
+_digest_client = _llm_aclient
 
 @app.post("/api/daily_digest")
 async def generate_daily_digest(req: DigestRequest):
@@ -956,7 +957,7 @@ async def generate_share_card(req: ShareCardRequest):
     返回分享卡所需的结构化数据，供前端 Canvas 渲染成精美图片。
     额外用 LLM 生成一句当代导读，让金句更有传播价值。
     """
-    _sc_client = AsyncOpenAI(api_key=_settings.API_KEY, base_url=_settings.BASE_URL)
+    _sc_client = _llm_aclient
     prompt = (
         f"以下是历史情境中「{req.speaker or '古人'}」的一句话：\n「{req.quote}」\n"
         f"朝代：{req.era or '不详'}\n"
@@ -1011,7 +1012,7 @@ class TTSRequest(BaseModel):
     era: str = ""
     voice_type: str = "默认"   # 默认/文人/女性/少年/权贵/市井
 
-_tts_client = AsyncOpenAI(api_key=_settings.API_KEY, base_url=_settings.BASE_URL)
+_tts_client = _llm_aclient
 
 @app.post("/api/tts")
 async def text_to_speech(req: TTSRequest):
@@ -1049,7 +1050,7 @@ class SceneImageRequest(BaseModel):
     session_id: str
     scene_hint: str = ""   # 可选：当前场景关键词
 
-_img_client = AsyncOpenAI(api_key=_settings.API_KEY, base_url=_settings.BASE_URL)
+_img_client = _llm_aclient
 
 # 水墨风格提示词模板
 _INK_STYLE = (
@@ -1073,7 +1074,7 @@ async def generate_scene_image(req: SceneImageRequest):
     scene_excerpt = scene_raw[-300:] if scene_raw else req.scene_hint or "古代中国文人茶室"
 
     # 先用 LLM 将对话场景提炼成图像提示词（英文）
-    _prompt_client = AsyncOpenAI(api_key=_settings.API_KEY, base_url=_settings.BASE_URL)
+    _prompt_client = _llm_aclient
     try:
         prompt_resp = await _prompt_client.chat.completions.create(
             model=_settings.MODEL_NAME,

@@ -25,7 +25,7 @@ from typing import Any, Dict, List, Optional
 
 from concept_engine import HistoryConcept  # noqa
 from inquiry_engine import _inquiry_engines  # noqa
-from emotion_engine import _thinking_engines_ref  # 通过 thinking_engine 访问
+from thinking_engine import _thinking_engines as _thinking_engines_ref  # noqa
 
 
 # ═══════════════════════════════════════════════════════════════

@@ -5,8 +5,216 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>息壤 | 生成式人文时空底座</title>
-    <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;700&family=Ma+Shan+Zheng&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/tsparticles@2.12.0/tsparticles.bundle.min.js"></script>
     <style>
+        /* ══════════════════════════════════════════
+           ✦ 息壤视觉特效层 ✦
+           粒子背景 · 水墨晕染 · 流光标题 · 毛玻璃卡片
+        ══════════════════════════════════════════ */
+
+        /* 粒子画布 — 铺满全屏，在最底层 */
+        #tsparticles {
+            position: fixed;
+            inset: 0;
+            z-index: -1;
+            pointer-events: none;
+        }
+
+        /* 水墨晕染背景光斑 */
+        body::before {
+            content: '';
+            position: fixed;
+            inset: 0;
+            z-index: -1;
+            background:
+                radial-gradient(ellipse 60% 40% at 20% 20%, rgba(200,168,74,0.07) 0%, transparent 70%),
+                radial-gradient(ellipse 50% 60% at 80% 70%, rgba(139,29,29,0.06) 0%, transparent 70%),
+                radial-gradient(ellipse 40% 50% at 50% 50%, rgba(253,246,227,0.0) 0%, transparent 80%);
+            pointer-events: none;
+            animation: inkDrift 18s ease-in-out infinite alternate;
+        }
+        @keyframes inkDrift {
+            0%   { opacity: 1; transform: scale(1) translate(0,0); }
+            50%  { opacity: 0.7; transform: scale(1.06) translate(1%,1.5%); }
+            100% { opacity: 1; transform: scale(1) translate(-1%,-1%); }
+        }
+
+        /* ── 标题流光效果 ── */
+        .header h1 {
+            font-family: 'Ma Shan Zheng', 'Noto Serif SC', serif !important;
+            font-size: 3.2em !important;
+            letter-spacing: 18px !important;
+            background: linear-gradient(
+                105deg,
+                #6b2020 0%,
+                #c8a84a 30%,
+                #8B1D1D 50%,
+                #e8c86a 70%,
+                #8B1D1D 100%
+            );
+            background-size: 250% auto;
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            animation: titleShimmer 5s linear infinite;
+            text-shadow: none;
+            filter: drop-shadow(0 2px 18px rgba(200,168,74,0.25));
+        }
+        @keyframes titleShimmer {
+            0%   { background-position: 0% center; }
+            100% { background-position: 250% center; }
+        }
+
+        /* 标题下方装饰线 */
+        .header::after {
+            content: '✦  ·  ·  ·  ✦';
+            display: block;
+            text-align: center;
+            color: rgba(200,168,74,0.5);
+            font-size: 0.75em;
+            letter-spacing: 8px;
+            margin-top: 10px;
+            animation: fadePulse 3s ease-in-out infinite;
+        }
+        @keyframes fadePulse {
+            0%, 100% { opacity: 0.4; }
+            50%       { opacity: 0.9; }
+        }
+
+        /* 副标题打字光标 */
+        .header p {
+            position: relative;
+            display: inline-block;
+            color: #a08860 !important;
+            letter-spacing: 3px !important;
+        }
+
+        /* ── 场景卡片 — 毛玻璃 + 悬停光晕 ── */
+        .scenario-card {
+            background: rgba(253,246,227,0.55) !important;
+            backdrop-filter: blur(10px) !important;
+            -webkit-backdrop-filter: blur(10px) !important;
+            border: 1px solid rgba(200,168,74,0.3) !important;
+            border-radius: 10px !important;
+            transition: transform 0.35s cubic-bezier(.22,1,.36,1),
+                        box-shadow 0.35s ease,
+                        border-color 0.35s ease !important;
+            position: relative;
+            overflow: hidden;
+        }
+        .scenario-card::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: radial-gradient(circle at 50% 0%, rgba(200,168,74,0.15) 0%, transparent 70%);
+            opacity: 0;
+            transition: opacity 0.35s ease;
+        }
+        .scenario-card:hover {
+            transform: translateY(-6px) scale(1.03) !important;
+            box-shadow: 0 16px 40px rgba(139,29,29,0.12),
+                        0 0 0 1px rgba(200,168,74,0.5),
+                        0 0 30px rgba(200,168,74,0.1) !important;
+            border-color: rgba(200,168,74,0.7) !important;
+        }
+        .scenario-card:hover::before { opacity: 1; }
+
+        /* ── 主操作按钮 — 金光溢出 ── */
+        .advance-btn {
+            position: relative;
+            overflow: hidden;
+            transition: transform 0.2s ease, box-shadow 0.2s ease !important;
+        }
+        .advance-btn::after {
+            content: '';
+            position: absolute;
+            top: -50%; left: -75%;
+            width: 50%; height: 200%;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.25), transparent);
+            transform: skewX(-20deg);
+            transition: left 0.6s ease;
+        }
+        .advance-btn:hover::after { left: 150%; }
+        .advance-btn:hover {
+            transform: translateY(-2px) !important;
+            box-shadow: 0 8px 24px rgba(139,29,29,0.25) !important;
+        }
+        #nextBtn {
+            background: linear-gradient(135deg, #8B1D1D, #a83030) !important;
+            box-shadow: 0 4px 15px rgba(139,29,29,0.3),
+                        inset 0 1px 0 rgba(255,255,255,0.1) !important;
+        }
+        #nextBtn:hover {
+            background: linear-gradient(135deg, #a02525, #c03838) !important;
+        }
+
+        /* ── 侧边面板 — 毛玻璃升级 ── */
+        .side-panel {
+            background: rgba(253,246,227,0.65) !important;
+            backdrop-filter: blur(12px) !important;
+            -webkit-backdrop-filter: blur(12px) !important;
+            border: 1px solid rgba(200,168,74,0.2) !important;
+            border-radius: 8px !important;
+            transition: box-shadow 0.3s ease !important;
+        }
+        .side-panel:hover {
+            box-shadow: 0 4px 20px rgba(139,29,29,0.06) !important;
+        }
+
+        /* ── 对话气泡 — 入场动画 ── */
+        .chat-bubble {
+            animation: bubbleIn 0.4s cubic-bezier(.22,1,.36,1) both;
+        }
+        @keyframes bubbleIn {
+            from { opacity: 0; transform: translateY(12px) scale(0.97); }
+            to   { opacity: 1; transform: translateY(0) scale(1); }
+        }
+
+        /* ── 顶部进度光条 — 场景加载指示 ── */
+        #xi-progress-bar {
+            position: fixed;
+            top: 0; left: 0;
+            height: 2px;
+            width: 0%;
+            background: linear-gradient(90deg, #8B1D1D, #c8a84a, #8B1D1D);
+            background-size: 200% 100%;
+            animation: progressShimmer 1.5s linear infinite;
+            z-index: 9999;
+            transition: width 0.4s ease;
+            box-shadow: 0 0 8px rgba(200,168,74,0.6);
+            display: none;
+        }
+        @keyframes progressShimmer {
+            0%   { background-position: 0% 50%; }
+            100% { background-position: 200% 50%; }
+        }
+
+        /* ── 输入框聚焦光晕 ── */
+        input[type=text]:focus, textarea:focus {
+            outline: none !important;
+            border-color: rgba(200,168,74,0.7) !important;
+            box-shadow: 0 0 0 3px rgba(200,168,74,0.12),
+                        0 0 16px rgba(200,168,74,0.1) !important;
+            transition: box-shadow 0.25s ease, border-color 0.25s ease !important;
+        }
+
+        /* ── 情绪变化时的全屏光波 ── */
+        @keyframes moodWave {
+            0%   { opacity: 0; transform: scale(0.8); }
+            50%  { opacity: 0.15; }
+            100% { opacity: 0; transform: scale(1.5); }
+        }
+        .mood-wave {
+            position: fixed;
+            inset: 0;
+            border-radius: 50%;
+            pointer-events: none;
+            z-index: 5;
+            background: radial-gradient(circle, var(--mood-accent) 0%, transparent 70%);
+            animation: moodWave 1.2s ease-out forwards;
+        }
+
         /* ══ 世界情绪 FSM CSS 变量 ══════════════════════════════ */
         :root {
             --bg-paper: #FDF6E3;
@@ -115,7 +323,22 @@
             font-size:0.78em; letter-spacing:3px; color:var(--accent-red);
             border-bottom:1px solid var(--border-gold);
             padding-bottom:10px; margin-bottom:14px; text-align:center;
+            cursor:pointer; user-select:none;
+            display:flex; align-items:center; justify-content:center; gap:6px;
         }
+        .side-panel-title::after {
+            content:'▾'; font-size:0.9em; opacity:0.5; transition:transform .25s;
+            letter-spacing:0;
+        }
+        .side-panel.collapsed .side-panel-title::after { transform:rotate(-90deg); }
+        .side-panel.collapsed > *:not(.side-panel-title) { display:none !important; }
+
+        /* ★ UX改进：面板状态指示灯 */
+        .panel-status-dot {
+            width:6px; height:6px; border-radius:50%;
+            background:#ddd; flex-shrink:0; transition:background .3s;
+        }
+        .panel-status-dot.active { background:var(--mood-accent,var(--accent-red)); }
 
         /* ── 产物面板 ── */
         .workspace-content { line-height:2; color:var(--text-ink); white-space:pre-wrap; font-size:0.98em; }
@@ -1440,6 +1663,34 @@
             font-family:monospace; font-size:0.85em; user-select:all;
         }
 
+        /* ══ Toast 通知 ══════════════════════════════════════ */
+        #xi-toast-container {
+            position: fixed; bottom: 24px; right: 24px;
+            z-index: 9999; display: flex; flex-direction: column; gap: 8px;
+            pointer-events: none;
+        }
+        .xi-toast {
+            padding: 10px 18px; border-radius: 8px; font-size: 0.88em;
+            font-family: 'Noto Serif SC', serif; letter-spacing: .04em;
+            max-width: 320px; line-height: 1.5; pointer-events: all;
+            opacity: 0; transform: translateX(20px);
+            transition: opacity .3s ease, transform .3s ease;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.12);
+        }
+        .xi-toast.show { opacity: 1; transform: translateX(0); }
+        .xi-toast.xi-toast-error   { background:#fff0f0; border:1px solid #e09090; color:#8B1D1D; }
+        .xi-toast.xi-toast-success { background:#f0fff4; border:1px solid #90c8a0; color:#1a5c30; }
+        .xi-toast.xi-toast-info    { background:#fffbf0; border:1px solid #d4b87a; color:#7a5200; }
+
+        /* ══ 对话流空状态 ════════════════════════════════════ */
+        #chat-stream-empty {
+            display: flex; flex-direction: column; align-items: center;
+            justify-content: center; min-height: 280px; opacity: 0.5;
+            text-align: center; padding: 40px 20px;
+        }
+        #chat-stream-empty .empty-icon { font-size: 2.8em; margin-bottom: 12px; }
+        #chat-stream-empty .empty-text { font-size: 0.88em; color: #a09070; letter-spacing: .08em; line-height: 2; }
+
     </style>
 </head>
 <body>
@@ -1499,12 +1750,25 @@
         <p>生成式人文时空计算底座 · 浩瀚绿洲</p>
     </div>
 
+    <!-- ✦ 粒子画布 -->
+    <div id="tsparticles"></div>
+    <!-- ✦ 顶部进度光条 -->
+    <div id="xi-progress-bar"></div>
+
     <div class="creation-panel" id="creationPanel">
         <h3>🌌 开辟新时空</h3>
 
         <!-- ── 预置历史场景选择器 ── -->
         <div id="preset-scenarios-wrap" style="margin-bottom:22px;">
-            <p style="color:#8a7050;font-size:0.85em;margin-bottom:10px;letter-spacing:.05em;">✦ 精选历史场景（即点即入）</p>
+            <!-- ★ UX改进：明确的步骤标识 -->
+            <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;">
+                <div style="
+                    background:var(--accent-red);color:#fff;border-radius:50%;
+                    width:22px;height:22px;display:flex;align-items:center;justify-content:center;
+                    font-size:0.75em;font-weight:700;flex-shrink:0;
+                ">1</div>
+                <p style="color:#8a7050;font-size:0.85em;margin:0;letter-spacing:.05em;">✦ 选择一个历史场景，即刻穿越（推荐新手从第一个开始）</p>
+            </div>
             <div id="scenario-cards" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px;">
                 <!-- 静态兜底，JS加载后替换 -->
                 <div class="scene-preset-card" onclick="usePreset('北宋元丰三年，黄州临皋亭雪夜','历史客观写实','song')">
@@ -1535,7 +1799,14 @@
         </div>
 
         <hr style="border:none;border-top:1px dashed var(--border-gold);margin:18px auto;width:70%;">
-        <h3>🎲 动态创世</h3>
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">
+            <div style="
+                background:rgba(139,29,29,0.15);color:var(--accent-red);border:1px solid var(--accent-red);border-radius:50%;
+                width:22px;height:22px;display:flex;align-items:center;justify-content:center;
+                font-size:0.75em;font-weight:700;flex-shrink:0;
+            ">或</div>
+            <h3 style="margin:0;color:var(--accent-red);">🎲 动态创世 — 自定义历史时空</h3>
+        </div>
         <p style="color:#777;font-size:0.9em;margin-bottom:16px;">输入主题与风格，大模型将为您动态生成世界观、环境与NPC网络。</p>
         <div style="margin-bottom:25px;">
             <input type="text" id="worldThemeInput" placeholder="主题，如：明朝万历年间，江南茶馆..." style="width:40%;">
@@ -1558,7 +1829,16 @@
     </div>
 
     <div class="container hidden" id="mainContainer">
-        <div class="deduction-stream" id="chat-stream"></div>
+        <div class="deduction-stream" id="chat-stream">
+            <div id="chat-stream-empty">
+                <div class="empty-icon">⌛</div>
+                <div class="empty-text">
+                    时空尚未开启<br>
+                    选择场景后点击「▶ 推进时空演化」<br>
+                    历史将在此处徐徐展开
+                </div>
+            </div>
+        </div>
 
         <!-- 右侧三层面板 -->
         <div class="side-panel-stack">
@@ -1818,26 +2098,71 @@
     </div>
 
 
-        <div class="mode-switch">
-            <button id="godModeBtn" class="active" onclick="switchMode('god')">⚡ 上帝环境干预</button>
-            <button id="playerModeBtn" onclick="switchMode('player')">👤 玩家化身入局</button>
+        <!-- ★ UX改进: 新手提示横幅 ★ -->
+        <div id="ux-hint-banner" style="
+            width:90%;max-width:1400px;margin:0 auto 14px;
+            background:linear-gradient(90deg,rgba(200,168,74,0.12),rgba(139,29,29,0.08));
+            border:1px solid rgba(200,168,74,0.35);border-radius:8px;
+            padding:10px 18px;display:flex;align-items:center;gap:12px;
+            font-size:0.82em;color:#6b5010;letter-spacing:.04em;
+        ">
+            <span style="font-size:1.3em;">💡</span>
+            <span id="ux-hint-text">选择上方「玩家化身入局」模式，输入你想对历史人物说的话，再点「推进时空演化」观察他们的反应！</span>
+            <button onclick="document.getElementById('ux-hint-banner').style.display='none'"
+                style="margin-left:auto;background:none;border:none;color:#a09070;cursor:pointer;font-size:1.1em;padding:2px 6px;">×</button>
         </div>
-        <div class="intervention-box" id="godPanel">
-            <input type="text" id="interventionInput" placeholder="在此输入高维指令（如：忽然一阵冷风吹开了窗户）...">
-            <button onclick="sendIntervention()">降下神谕</button>
-        </div>
-        <div class="intervention-box hidden" id="playerPanel">
-            <input type="text" id="playerAction" placeholder="你的动作 (如: 走上前作揖)" style="flex:0.3;">
-            <input type="text" id="playerDialogue" placeholder="对他们说点什么..." style="flex:0.7;">
-            <button onclick="sendPlayerAction()">发言</button>
-        </div>
-        <div style="display:flex;gap:12px;margin-top:5px;align-items:center;">
-            <button class="advance-btn" id="nextBtn" onclick="nextRound()">推进时空演化 (Advance)</button>
-            <button class="advance-btn" id="graphBtn" onclick="openGraph()" style="background:transparent;border:1px solid var(--accent-red);color:var(--accent-red);padding:9px 18px;font-size:0.9em;letter-spacing:1px;">🕸 关系图谱</button>
-            <button class="advance-btn" id="quizBtn" onclick="startQuiz()" style="background:transparent;border:1px solid #2C3E50;color:#2C3E50;padding:9px 18px;font-size:0.9em;letter-spacing:1px;">📜 记忆测验</button>
-            <button class="advance-btn" onclick="openKnowledgeAdmin()" style="background:transparent;border:1px solid #4a5580;color:#4a5580;padding:9px 18px;font-size:0.9em;letter-spacing:1px;">📚 史料库</button>
-            <button class="advance-btn" onclick="openHeatmap()" style="background:transparent;border:1px solid #2a6e3f;color:#2a6e3f;padding:9px 18px;font-size:0.9em;letter-spacing:1px;">🗺 知识图</button>
-            <button class="advance-btn" onclick="openClassroom()" style="background:transparent;border:1px solid #c8a84a;color:#8a6200;padding:9px 18px;font-size:0.9em;letter-spacing:1px;">🏫 共探</button>
+
+        <!-- ★ UX改进: 输入区加 id 供引导系统定位 + 重新布局 ★ -->
+        <div id="chat-input-area" style="
+            width:90%;max-width:1400px;margin:0 auto;
+            background:rgba(255,255,255,0.7);border:1px solid var(--border-gold);
+            border-radius:8px;padding:16px 20px;
+            box-shadow:0 2px 12px rgba(0,0,0,0.04);
+        ">
+            <!-- 模式切换 — 更清晰的标签设计 -->
+            <div style="display:flex;align-items:center;gap:0;margin-bottom:12px;border-bottom:1px solid var(--border-gold);padding-bottom:10px;">
+                <span style="font-size:0.78em;color:#a09070;letter-spacing:.08em;margin-right:14px;">交互模式</span>
+                <div class="mode-switch" style="width:auto;margin:0;">
+                    <button id="godModeBtn" class="active" onclick="switchMode('god')" title="以旁观者身份干预世界环境">⚡ 环境干预</button>
+                    <button id="playerModeBtn" onclick="switchMode('player')" title="扮演一个角色直接参与对话">👤 角色入局</button>
+                </div>
+                <span id="mode-hint-text" style="margin-left:12px;font-size:0.75em;color:#b08840;font-style:italic;opacity:0.8;">
+                    以旁观者视角改变环境，影响历史走向
+                </span>
+            </div>
+
+            <!-- 上帝模式输入 -->
+            <div class="intervention-box" id="godPanel" style="width:100%;max-width:100%;margin-bottom:8px;">
+                <input type="text" id="interventionInput" placeholder="输入环境指令（如：忽然一阵冷风吹开了窗户，烛火随风摇曳...）" style="flex:1;">
+                <button onclick="sendIntervention()" style="white-space:nowrap;">降下神谕</button>
+            </div>
+
+            <!-- 玩家模式输入 -->
+            <div class="intervention-box hidden" id="playerPanel" style="width:100%;max-width:100%;flex-wrap:wrap;gap:8px;margin-bottom:8px;">
+                <input type="text" id="playerAction" placeholder="你的动作（如：走上前，深施一礼）" style="flex:0 0 35%;min-width:160px;">
+                <input type="text" id="playerDialogue" placeholder="说的话（如：先生，这局势该如何是好？）" style="flex:1;min-width:200px;">
+                <button onclick="sendPlayerAction()" style="white-space:nowrap;">✦ 入局发言</button>
+            </div>
+
+            <!-- 操作按钮行 — 主次分明 -->
+            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+                <!-- 主要操作 -->
+                <button class="advance-btn" id="nextBtn" onclick="nextRound()" style="font-size:0.95em;padding:10px 22px;letter-spacing:1.5px;">
+                    ▶ 推进时空演化
+                </button>
+                <div style="width:1px;height:24px;background:var(--border-gold);margin:0 4px;"></div>
+                <!-- 次要操作 -->
+                <button class="advance-btn" id="graphBtn" onclick="openGraph()" style="background:transparent;border:1px solid var(--accent-red);color:var(--accent-red);padding:8px 14px;font-size:0.82em;">🕸 关系图谱</button>
+                <button class="advance-btn" id="quizBtn" onclick="startQuiz()" style="background:transparent;border:1px solid #2C3E50;color:#2C3E50;padding:8px 14px;font-size:0.82em;">📜 测验</button>
+                <button class="advance-btn" onclick="openKnowledgeAdmin()" style="background:transparent;border:1px solid #4a5580;color:#4a5580;padding:8px 14px;font-size:0.82em;">📚 史料库</button>
+                <button class="advance-btn" onclick="openHeatmap()" style="background:transparent;border:1px solid #2a6e3f;color:#2a6e3f;padding:8px 14px;font-size:0.82em;">🗺 知识图</button>
+                <button class="advance-btn" onclick="openClassroom()" style="background:transparent;border:1px solid #c8a84a;color:#8a6200;padding:8px 14px;font-size:0.82em;">🏫 共探</button>
+
+                <!-- 快捷操作提示 -->
+                <span style="margin-left:auto;font-size:0.72em;color:#b0a090;letter-spacing:.04em;">
+                    按 Enter 快速推进时空
+                </span>
+            </div>
         </div>
     </div>
 
@@ -2539,11 +2864,11 @@
         }
 
         function showToastMsg(msg) {
-            const t = document.getElementById('badge-toast');
-            if (!t) return;
-            t.textContent = msg;
-            t.style.opacity = '1';
-            setTimeout(() => { t.style.opacity = '0'; }, 2500);
+            // 兼容旧调用，代理到统一 toast 系统
+            if (window.showToast) {
+                const type = msg.includes('失败') || msg.includes('错误') ? 'error' : 'info';
+                window.showToast(msg, type);
+            }
         }
 
         /* ══ Phase 14A · 史料工作坊 ════════════════════════════ */
@@ -3124,9 +3449,10 @@
             const genre = document.getElementById('worldGenreInput').value;
             const btn = document.getElementById('createWorldBtn');
             const statusDiv = document.getElementById('creationStatus');
-            if (!theme) { alert("请输入要创世的主题！"); return; }
+            if (!theme) { showToast('请先输入要探究的历史主题！', 'info'); return; }
             btn.disabled = true;
-            statusDiv.innerText = "🌌 正在连接高维大模型进行世界推演，请耐心等待（约 10-20 秒）...";
+            btn.innerText = '创世中…';
+            statusDiv.innerText = '🌌 正在连接大模型推演世界，约 10-20 秒…';
             try {
                 const body = { theme, genre };
                 if (eraKey) body.era_key = eraKey;
@@ -3136,30 +3462,35 @@
                 });
                 const data = await res.json();
                 if (res.status === 402) {
-                    statusDiv.innerHTML = '❌ 免费次数已用完。<a href="/api/payment/plans" target="_blank" style="color:var(--accent-red)">查看升级方案 →</a>';
-                    btn.disabled = false; return;
+                    statusDiv.innerHTML = '';
+                    showToast('免费次数已用完，请升级订阅继续探究', 'error', 5000);
+                    btn.disabled = false; btn.innerText = '创世'; return;
                 }
-                if (data.status === "success") {
+                if (data.status === 'success') {
                     currentSessionId = data.session_id;
+                    statusDiv.innerText = '';
                     if (data.world_mood) applyMood(data.world_mood);
                     enterWorldMode();
                     initWorldUI(data);
                     refreshProfile();
+                    showToast('时空已开启，点击「▶ 推进时空演化」开始探究', 'success', 4000);
                     if (data.quota && data.quota.plan === 'free' && data.quota.sessions_remaining <= 1)
-                        showToastMsg('⚠️ 免费体验还剩 ' + data.quota.sessions_remaining + ' 次，升级订阅继续探究');
+                        showToast('免费体验还剩 ' + data.quota.sessions_remaining + ' 次', 'info');
                 } else {
-                    statusDiv.innerText = "❌ 创世失败：" + (data.detail || data.message || '未知错误');
-                    btn.disabled = false;
+                    statusDiv.innerText = '';
+                    showToast('创世失败：' + (data.detail || data.message || '未知错误'), 'error');
+                    btn.disabled = false; btn.innerText = '创世';
                 }
             } catch(e) {
-                statusDiv.innerText = "❌ 网络错误，无法连接到后端世界架构师。";
-                btn.disabled = false;
+                statusDiv.innerText = '';
+                showToast('网络错误，请检查后端是否启动', 'error');
+                btn.disabled = false; btn.innerText = '创世';
             }
         }
 
         function resumeWorld() {
             const sid = document.getElementById('resumeSessionId').value.trim();
-            if (!sid) { alert("请输入要唤醒的 Session ID！"); return; }
+            if (!sid) { showToast('请输入要唤醒的 Session ID', 'info'); return; }
             currentSessionId = sid;
             enterWorldMode();
             const stream = document.getElementById('chat-stream');
@@ -3187,6 +3518,8 @@
             document.getElementById('creationPanel').classList.add('hidden');
             document.getElementById('mainContainer').classList.remove('hidden');
             document.getElementById('controlsPanel').classList.remove('hidden');
+            // ★ UX改进：进入场景后显示操作引导
+            showInputAreaAfterEntry();
         }
 
         function initWorldUI(data) {
@@ -3215,9 +3548,19 @@
             document.getElementById('playerModeBtn').classList.toggle('active', mode==='player');
             document.getElementById('godPanel').classList.toggle('hidden', mode!=='god');
             document.getElementById('playerPanel').classList.toggle('hidden', mode!=='player');
-        }
-
-            document.getElementById('playerPanel').classList.toggle('hidden', mode!=='player');
+            // UX改进：更新模式说明文字
+            const hintEl = document.getElementById('mode-hint-text');
+            if (hintEl) {
+                hintEl.textContent = mode === 'god'
+                    ? '以旁观者视角改变环境，影响历史走向'
+                    : '扮演身边旁观者，直接与历史人物对话';
+            }
+            const bannerHint = document.getElementById('ux-hint-text');
+            if (bannerHint) {
+                bannerHint.textContent = mode === 'god'
+                    ? '输入一个环境变化（如天气、突发事件），点「降下神谕」，再点「▶ 推进时空演化」查看历史人物的反应！'
+                    : '在左框填入动作，右框输入你想说的话，点「✦ 入局发言」后再点「▶ 推进时空演化」！';
+            }
         }
 
         /* ══ Phase 15A · 学习地图 ════════════════════════════ */
@@ -3594,12 +3937,12 @@
                 removeThinking();
                 removeStreamCard();
                 resetButton();
-                appendNarrator("【系统】时空波动异常，演算暂时中断。");
+                showToast('时空波动异常，请稍后重试', 'error');
             };
 
             function resetButton() {
                 btn.disabled = false;
-                btn.innerText = "推进时空演化 (Advance)";
+                btn.innerText = "▶ 推进时空演化";
                 scrollToBottom();
                 refreshProfile();
             }
@@ -4660,7 +5003,7 @@
                 renderJob(job);
                 pollJob(job.job_id);
             } catch(e) {
-                alert('摄入启动失败：' + e.message);
+                showToastMsg('摄入启动失败：' + e.message);
             }
         }
 
@@ -4917,7 +5260,7 @@
         });
 
         async function createClassroom() {
-            if (!currentSessionId) { alert('请先进入一个时空会话'); return; }
+            if (!currentSessionId) { showToast('请先进入一个时空会话', 'info'); return; }
             const teacherId = document.getElementById('cls-teacher-id').value.trim() || currentUserId;
             const roomName  = document.getElementById('cls-room-name').value.trim();
             try {
@@ -4929,13 +5272,13 @@
                 document.getElementById('cls-create-result').innerHTML =
                     `✅ 课堂已创建！房间号：<span class="cls-room-id">${room.room_id}</span>（发给学生）`;
                 _enterRoom(room.room_id, teacherId, 'teacher');
-            } catch(e) { alert('创建失败: ' + e.message); }
+            } catch(e) { showToast('创建失败: ' + e.message, 'error'); }
         }
 
         async function joinClassroom() {
             const roomId   = document.getElementById('cls-room-id-input').value.trim();
             const userId   = document.getElementById('cls-student-id').value.trim() || currentUserId;
-            if (!roomId) { alert('请输入房间号'); return; }
+            if (!roomId) { showToast('请输入房间号', 'info'); return; }
             try {
                 const res = await fetch('/api/classroom/join', {
                     method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -4945,7 +5288,7 @@
                 document.getElementById('cls-join-result').textContent =
                     `✅ 已加入课堂，成员 ${d.member_count} 人`;
                 _enterRoom(roomId, userId, 'student');
-            } catch(e) { alert('加入失败: ' + e.message); }
+            } catch(e) { showToast('加入失败: ' + e.message, 'error'); }
         }
 
         function _enterRoom(roomId, userId, role) {
@@ -5518,7 +5861,7 @@
     <div class="ob-btn-row">
       <div class="ob-step-dots"><div class="ob-dot active" id="wd0"></div><div class="ob-dot" id="wd1"></div><div class="ob-dot" id="wd2"></div><div class="ob-dot" id="wd3"></div><div class="ob-dot" id="wd4"></div></div>
       <button class="ob-btn-skip" onclick="obSkip()">跳过引导</button>
-      <button class="ob-btn-start" onclick="obStartTour()">开始引导 →</button>
+      <button class="ob-btn-start" onclick="obStartTour()">开始 5 步引导 →</button>
     </div>
   </div>
 </div>
@@ -5541,15 +5884,92 @@
 <script>
 window.addEventListener('load', loadScenariosFromAPI);
 
+// ★ Toast 通知系统
+(function setupToast() {
+    const container = document.createElement('div');
+    container.id = 'xi-toast-container';
+    document.body.appendChild(container);
+})();
+
+window.showToast = function(msg, type = 'info', duration = 3500) {
+    const container = document.getElementById('xi-toast-container');
+    if (!container) return;
+    const toast = document.createElement('div');
+    const icons = { error: '✕', success: '✓', info: '✦' };
+    toast.className = `xi-toast xi-toast-${type}`;
+    toast.textContent = (icons[type] || '') + '  ' + msg;
+    container.appendChild(toast);
+    requestAnimationFrame(() => requestAnimationFrame(() => toast.classList.add('show')));
+    setTimeout(() => {
+        toast.classList.remove('show');
+        setTimeout(() => toast.remove(), 350);
+    }, duration);
+};
+
+// ★ 首条内容出现时隐藏空状态
+(function watchChatStream() {
+    const stream = document.getElementById('chat-stream');
+    const empty  = document.getElementById('chat-stream-empty');
+    if (!stream || !empty) return;
+    const obs = new MutationObserver(() => {
+        if (stream.children.length > 1) { empty.style.display = 'none'; obs.disconnect(); }
+    });
+    obs.observe(stream, { childList: true });
+})();
+
+// ★ UX改进：侧边面板折叠功能（默认折叠次要面板）
+window.addEventListener('DOMContentLoaded', function() {
+    // 让所有 side-panel-title 可折叠
+    document.querySelectorAll('.side-panel-title').forEach(function(title) {
+        title.addEventListener('click', function(e) {
+            // 如果点击的是内部按钮则不折叠
+            if (e.target.tagName === 'BUTTON') return;
+            const panel = title.closest('.side-panel');
+            if (panel) panel.classList.toggle('collapsed');
+        });
+    });
+
+    // 默认折叠次要面板，只保留核心面板展开
+    const defaultCollapsed = ['#cross-panel', '#map-panel', '#export-panel', '#workshop-panel'];
+    defaultCollapsed.forEach(function(sel) {
+        const el = document.querySelector(sel);
+        if (el) el.classList.add('collapsed');
+    });
+});
+
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Enter' && !e.shiftKey) {
+        const active = document.activeElement;
+        if (!active) return;
+        // 在输入框中按 Enter 触发对应操作
+        if (active.id === 'interventionInput') { e.preventDefault(); sendIntervention(); }
+        else if (active.id === 'playerDialogue') { e.preventDefault(); sendPlayerAction(); }
+        else if (active.id === 'playerAction') { active.blur(); document.getElementById('playerDialogue')?.focus(); }
+        else if (active.id === 'worldThemeInput') { e.preventDefault(); createNewWorld(); }
+        else if (active.id === 'resumeSessionId') { e.preventDefault(); resumeWorld(); }
+    }
+});
+
+// ★ UX改进：进入场景后自动滚动到输入区并显示引导横幅
+function showInputAreaAfterEntry() {
+    const banner = document.getElementById('ux-hint-banner');
+    const inputArea = document.getElementById('chat-input-area');
+    if (banner) banner.style.display = 'flex';
+    if (inputArea) {
+        setTimeout(() => inputArea.scrollIntoView({ behavior: 'smooth', block: 'nearest' }), 800);
+    }
+}
+
+
 const OB_KEY = 'xirang_onboard_done_v1';
 let currentSessionId = typeof currentSessionId !== 'undefined' ? currentSessionId : '';
 
 const OB_STEPS = [
-  { title:'选择历史场景', desc:'点击任意场景卡片或在下方输入自定义主题，即可穿越到那个年代。推荐从「北宋·苏轼黄州夜话」开始！', selector:'#preset-scenarios-wrap', arrow:'top' },
-  { title:'进入场景后与历史人物对话', desc:'右侧对话框直接向苏轼、杜甫、康有为提问，他们会用符合历史的方式回应。试着问：「你为何做出这个选择？」', selector:'#chat-input-area', arrow:'bottom', waitForWorld:true },
-  { title:'苏格拉底追问 & 大概念', desc:'点击「探究」标签页，AI 会生成深度问题引导你思考因果关系、历史意义等大概念。每次触碰大概念都计入探究报告。', selector:'.tab-btn', arrow:'top', waitForWorld:true },
-  { title:'教师实况大屏', desc:'老师可访问 /teacher 打开大屏，实时看到学生触碰的概念、情绪和卡住情况，并发送插话提示引导全班探究方向。', selector:'#preset-scenarios-wrap', arrow:'top' },
-  { title:'成就系统 & PDF报告', desc:'每次探究自动解锁成就、更新排行榜。教师版可导出 PDF 探究报告，或生成微信分享卡片发给同学。', selector:'#preset-scenarios-wrap', arrow:'top' },
+  { title:'选择历史场景', desc:'点击任意场景卡片即可穿越到那个年代。推荐从「北宋·苏轼黄州夜话」开始，感受最完整的历史沉浸体验！', selector:'#preset-scenarios-wrap', arrow:'top' },
+  { title:'与历史人物对话', desc:'进入场景后，在下方输入区选择「角色入局」模式，输入你想说的话，再点「推进时空演化」，历史人物会用符合史实的方式回应你！', selector:'#chat-input-area', arrow:'bottom', waitForWorld:true },
+  { title:'苏格拉底追问 & 大概念', desc:'右侧「大概念」面板会自动识别你触碰了哪些历史学核心命题（变革、因果、视角…），点击概念标签获取深度探究问题！', selector:'#concept-panel', arrow:'left', waitForWorld:true },
+  { title:'探索成就系统', desc:'每次探究自动积累探索档案，解锁成就徽章，7天连续探索可获得「时空旅者」称号！', selector:'#profile-panel', arrow:'left' },
+  { title:'导出你的探究成果', desc:'探索结束后，点击「导出中心」生成PDF探究报告，或生成分享卡片展示你的历史感悟。老师可用 /teacher 查看实况大屏！', selector:'#export-panel', arrow:'left' },
 ];
 
 let obStep = 0;
@@ -5641,6 +6061,193 @@ function obRender() {
 }
 
 setTimeout(obShow, 800);
+</script>
+
+<script>
+/* ══════════════════════════════════════════
+   ✦ 息壤视觉特效引擎 ✦
+══════════════════════════════════════════ */
+
+// ── 1. 金色粒子系统 ──────────────────────
+(function initParticles() {
+    if (typeof tsParticles === 'undefined') return;
+    tsParticles.load('tsparticles', {
+        fpsLimit: 60,
+        background: { color: { value: 'transparent' } },
+        particles: {
+            number: { value: 55, density: { enable: true, area: 900 } },
+            color: { value: ['#c8a84a', '#e8c87a', '#8B1D1D', '#d4c4a8'] },
+            shape: {
+                type: ['circle', 'char'],
+                character: [
+                    { value: ['✦', '·', '○', '◇', '∙'], font: 'serif', style: '', weight: '400' }
+                ]
+            },
+            opacity: {
+                value: { min: 0.05, max: 0.35 },
+                animation: { enable: true, speed: 0.5, minimumValue: 0.05, sync: false }
+            },
+            size: {
+                value: { min: 1, max: 4 },
+                animation: { enable: true, speed: 1.2, minimumValue: 0.5, sync: false }
+            },
+            links: {
+                enable: true,
+                distance: 160,
+                color: '#c8a84a',
+                opacity: 0.08,
+                width: 0.8
+            },
+            move: {
+                enable: true,
+                speed: { min: 0.2, max: 0.7 },
+                direction: 'none',
+                random: true,
+                straight: false,
+                outModes: { default: 'bounce' },
+                attract: { enable: false }
+            }
+        },
+        interactivity: {
+            events: {
+                onHover: {
+                    enable: true,
+                    mode: 'grab'
+                },
+                resize: true
+            },
+            modes: {
+                grab: {
+                    distance: 140,
+                    links: { opacity: 0.3 }
+                }
+            }
+        },
+        detectRetina: true
+    });
+})();
+
+// ── 2. 进度光条控制 ──────────────────────
+window.xiProgress = {
+    bar: null,
+    timer: null,
+    fake: 0,
+    start() {
+        this.bar = this.bar || document.getElementById('xi-progress-bar');
+        if (!this.bar) return;
+        this.fake = 0;
+        this.bar.style.display = 'block';
+        this.bar.style.width = '0%';
+        clearInterval(this.timer);
+        this.timer = setInterval(() => {
+            this.fake += Math.random() * 8;
+            if (this.fake >= 85) { this.fake = 85; clearInterval(this.timer); }
+            this.bar.style.width = this.fake + '%';
+        }, 200);
+    },
+    done() {
+        this.bar = this.bar || document.getElementById('xi-progress-bar');
+        clearInterval(this.timer);
+        if (!this.bar) return;
+        this.bar.style.width = '100%';
+        setTimeout(() => {
+            if (this.bar) { this.bar.style.opacity = '0'; this.bar.style.transition = 'opacity 0.4s'; }
+            setTimeout(() => {
+                if (this.bar) { this.bar.style.display = 'none'; this.bar.style.opacity = '1'; this.bar.style.transition = ''; }
+            }, 400);
+        }, 300);
+    }
+};
+
+// 拦截 fetch 自动触发进度条
+(function patchFetch() {
+    const orig = window.fetch;
+    window.fetch = function(...args) {
+        const url = (args[0] || '').toString();
+        if (url.includes('/api/') || url.includes('anthropic')) {
+            window.xiProgress.start();
+            return orig.apply(this, args).then(r => {
+                window.xiProgress.done();
+                return r;
+            }).catch(e => {
+                window.xiProgress.done();
+                throw e;
+            });
+        }
+        return orig.apply(this, args);
+    };
+})();
+
+// ── 3. 情绪变化光波特效 ──────────────────
+(function patchMoodWave() {
+    const origSetAttr = Element.prototype.setAttribute;
+    Element.prototype.setAttribute = function(name, value) {
+        if (name === 'data-mood' && this === document.body) {
+            const prev = this.getAttribute('data-mood');
+            if (prev !== value) {
+                const wave = document.createElement('div');
+                wave.className = 'mood-wave';
+                document.body.appendChild(wave);
+                setTimeout(() => wave.remove(), 1200);
+                // 同步更新粒子颜色
+                const moodColors = {
+                    SERENE:    ['#2a6e3f', '#b5d5c0', '#a8c8a8'],
+                    MELANCHOLY:['#4a5580', '#9ca8c8', '#7080a0'],
+                    TENSE:     ['#961a0a', '#e0876a', '#c04030'],
+                    JOYFUL:    ['#8a6200', '#e0c060', '#c8a840'],
+                    SOLEMN:    ['#4a3820', '#a09070', '#806040'],
+                    CHAOTIC:   ['#6b1060', '#c070b0', '#902080'],
+                };
+                const colors = moodColors[value] || ['#c8a84a', '#8B1D1D', '#d4c4a8'];
+                if (window._particlesInstance) {
+                    try { window._particlesInstance.options.particles.color.value = colors; } catch(e) {}
+                }
+            }
+        }
+        return origSetAttr.call(this, name, value);
+    };
+})();
+
+// ── 4. 对话气泡入场动画 ──────────────────
+(function observeBubbles() {
+    const chatStream = document.getElementById('chat-stream') || document.querySelector('.chat-stream');
+    if (!chatStream) return;
+    const obs = new MutationObserver(muts => {
+        muts.forEach(m => {
+            m.addedNodes.forEach(node => {
+                if (node.nodeType === 1) {
+                    node.style.animationDelay = '0ms';
+                    node.classList.add('chat-bubble');
+                }
+            });
+        });
+    });
+    obs.observe(chatStream, { childList: true });
+})();
+
+// ── 5. 场景卡片生成后自动补 class ────────
+(function patchScenarioCards() {
+    const wrap = document.getElementById('scenario-cards');
+    if (!wrap) return;
+    const obs = new MutationObserver(() => {
+        wrap.querySelectorAll('div[style*="cursor"]').forEach(card => {
+            if (!card.classList.contains('scenario-card')) {
+                card.classList.add('scenario-card');
+            }
+        });
+    });
+    obs.observe(wrap, { childList: true, subtree: true });
+})();
+
+// ── 6. 页面载入时的标题入场动画 ───────────
+(function titleEntrance() {
+    const h1 = document.querySelector('.header h1');
+    const p  = document.querySelector('.header p');
+    if (h1) { h1.style.opacity = '0'; h1.style.transform = 'translateY(-20px)';
+        setTimeout(() => { h1.style.transition = 'opacity 1s ease, transform 1s ease'; h1.style.opacity = '1'; h1.style.transform = 'none'; }, 100); }
+    if (p)  { p.style.opacity  = '0';
+        setTimeout(() => { p.style.transition  = 'opacity 1.2s ease'; p.style.opacity  = '1'; }, 500); }
+})();
 </script>
 </body>
 </html>

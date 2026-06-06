@@ -11,7 +11,7 @@ import json
 import os
 import re
 
-from openai import OpenAI
+from infra.llm_client import llm_chat
 
 from config import get_settings
 from agent import SocialAgent
@@ -19,7 +19,6 @@ from world_engine import WorldEngine
 from prompt_templates import SCENARIO_GENERATOR
 
 _settings = get_settings()
-_client = OpenAI(api_key=_settings.API_KEY, base_url=_settings.BASE_URL)
 
 
 class ScenarioManager:
@@ -37,16 +36,21 @@ class ScenarioManager:
 
     # ── 世界生成 ──────────────────────────────────────────────
 
-    def generate_dynamic_scenario(self, theme: str, genre: str, session_id: str):
+    async def generate_dynamic_scenario(self, theme: str, genre: str, session_id: str):
         print(f"\n🌌 [世界架构师] 开辟平行时空「{theme}」({genre})")
         prompt = SCENARIO_GENERATOR.substitute(theme=theme, genre=genre)
         try:
-            resp = _client.chat.completions.create(
-                model=_settings.MODEL_NAME,
+            raw = await llm_chat(
                 messages=[{"role": "user", "content": prompt}],
                 temperature=0.8,
+                max_tokens=2000,
+                timeout=60.0,
+                retries=3,
+                fallback_text="",
             )
-            raw = _strip_json(resp.choices[0].message.content.strip())
+            if not raw:
+                raise ValueError("LLM 返回为空")
+            raw = _strip_json(raw.strip())
             match = re.search(r'\{.*\}', raw, re.DOTALL)
             if not match:
                 raise ValueError("未能提取有效 JSON")

@@ -15,7 +15,7 @@ import asyncio
 import json
 import re
 
-from openai import AsyncOpenAI
+from infra.llm_client import aclient as _client, llm_chat, llm_chat_stream
 
 from config import get_settings
 from memory import SocialMemory
@@ -25,7 +25,6 @@ from event_bus import bus, Event, EventType
 from prompt_templates import AGENT_SYSTEM, EMOTION_STYLE_INJECTION
 
 _settings = get_settings()
-_client = AsyncOpenAI(api_key=_settings.API_KEY, base_url=_settings.BASE_URL)
 
 
 class SocialAgent:
@@ -146,23 +145,18 @@ class SocialAgent:
         ))
 
         try:
-            response = await _client.chat.completions.create(
-                model=_settings.MODEL_NAME,
+            raw_full_text = ""
+            async for token in llm_chat_stream(
                 messages=[
                     {"role": "system", "content": system_prompt},
                     {"role": "user",   "content": current_dialogue[-500:]},
                 ],
                 temperature=0.7,
-                stream=True,
-                timeout=30,
-            )
-
-            raw_full_text = ""
-            async for chunk in response:
-                if chunk.choices[0].delta.content:
-                    token = chunk.choices[0].delta.content
-                    raw_full_text += token
-                    yield {"type": "token", "content": token}
+                max_tokens=2000,
+                timeout=90.0,
+            ):
+                raw_full_text += token
+                yield {"type": "token", "content": token}
 
             # ── 流结束：解析 + 人格一致性检查 ─────────────────
             raw = _strip_json(raw_full_text.strip())

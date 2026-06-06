@@ -224,18 +224,26 @@ def _verify_wechat_notify(body: bytes, headers: dict) -> bool:
         # 构造签名消息
         message = f"{wechat_pay_timestamp}\n{wechat_pay_nonce}\n{body.decode()}\n"
 
-        # TODO 生产：加载微信平台证书，用 RSA-SHA256 验证 wechat_pay_signature
-        # from cryptography.hazmat.primitives import hashes, serialization
-        # from cryptography.hazmat.primitives.asymmetric import padding
-        # import base64
-        # public_key.verify(
-        #     base64.b64decode(wechat_pay_signature),
-        #     message.encode(),
-        #     padding.PKCS1v15(),
-        #     hashes.SHA256()
-        # )
-        _log.warning("⚠️ 微信回调验签：证书未配置，跳过RSA验证（生产环境必须配置）")
-        return True
+        # 微信支付平台证书 RSA-SHA256 验签
+        wechat_cert_pem = os.environ.get("WECHAT_PAY_CERT_PEM", "")
+        if not wechat_cert_pem:
+            _log.warning("⚠️ 微信回调验签：WECHAT_PAY_CERT_PEM 未配置，跳过RSA验证（生产环境必须配置）")
+            return True
+        try:
+            from cryptography.hazmat.primitives import hashes, serialization
+            from cryptography.hazmat.primitives.asymmetric import padding
+            import base64
+            public_key = serialization.load_pem_public_key(wechat_cert_pem.encode())
+            public_key.verify(
+                base64.b64decode(wechat_pay_signature),
+                message.encode('utf-8'),
+                padding.PKCS1v15(),
+                hashes.SHA256()
+            )
+            return True
+        except Exception as verify_err:
+            _log.error(f"微信回调RSA验签失败: {verify_err}")
+            return False
     except Exception as e:
         _log.error(f"微信回调验签异常: {e}")
         return False
@@ -255,21 +263,26 @@ def _verify_alipay_notify(form_data: dict) -> bool:
         params = {k: v for k, v in form_data.items() if k not in ("sign", "sign_type")}
         sorted_params = "&".join(f"{k}={v}" for k, v in sorted(params.items()))
 
-        if not _settings.ALIPAY_PRIVATE_KEY:
-            _log.warning("⚠️ 支付宝回调验签：ALIPAY_PRIVATE_KEY 未配置，跳过验证（生产环境必须配置）")
+        alipay_public_key_pem = os.environ.get("ALIPAY_PUBLIC_KEY_PEM", "")
+        if not alipay_public_key_pem:
+            _log.warning("⚠️ 支付宝回调验签：ALIPAY_PUBLIC_KEY_PEM 未配置，跳过验证（生产环境必须配置）")
             return True
 
-        # TODO 生产：用支付宝公钥验证签名
-        # from cryptography.hazmat.primitives import hashes, serialization
-        # from cryptography.hazmat.primitives.asymmetric import padding
-        # import base64
-        # alipay_public_key.verify(
-        #     base64.b64decode(sign),
-        #     sorted_params.encode('utf-8'),
-        #     padding.PKCS1v15(),
-        #     hashes.SHA256()
-        # )
-        return True
+        try:
+            from cryptography.hazmat.primitives import hashes, serialization
+            from cryptography.hazmat.primitives.asymmetric import padding
+            import base64
+            public_key = serialization.load_pem_public_key(alipay_public_key_pem.encode())
+            public_key.verify(
+                base64.b64decode(sign),
+                sorted_params.encode('utf-8'),
+                padding.PKCS1v15(),
+                hashes.SHA256()
+            )
+            return True
+        except Exception as verify_err:
+            _log.error(f"支付宝回调RSA2验签失败: {verify_err}")
+            return False
     except Exception as e:
         _log.error(f"支付宝回调验签异常: {e}")
         return False
